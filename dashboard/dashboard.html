@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Energético — Multicentro</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333}
+#loader{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.load-box{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:48px;max-width:620px;width:100%;text-align:center}
+.load-box h1{color:#1a3a5c;font-size:1.6rem;margin-bottom:8px}
+.load-box p.sub{color:#666;margin-bottom:24px;font-size:.95rem}
+.drop-zone{border:2.5px dashed #b0c4de;border-radius:12px;padding:48px 24px;margin-bottom:20px;cursor:pointer;transition:all .2s}
+.drop-zone.over{border-color:#2980b9;background:#eaf4fb}
+.drop-zone p{color:#555;font-size:1rem}
+.drop-zone .icon{font-size:2.5rem;margin-bottom:8px}
+.file-list{text-align:left;margin:20px 0}
+.file-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:4px;font-size:.9rem}
+.file-item .ck{width:22px;height:22px;border-radius:50%;border:2px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:.75rem;flex-shrink:0}
+.file-item.loaded .ck{border-color:#16a34a;background:#dcfce7;color:#16a34a}
+.file-item .fn{color:#555}.file-item.loaded .fn{color:#1a3a5c;font-weight:600}
+#btn-go{display:none;margin-top:20px;padding:14px 36px;background:#2980b9;color:#fff;border:none;border-radius:10px;font-size:1.05rem;font-weight:600;cursor:pointer;transition:background .2s}
+#btn-go:hover{background:#1a6fa0}
+#btn-file{padding:10px 24px;background:#e8f0fe;color:#2980b9;border:2px solid #2980b9;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;margin-top:8px}
+#dashboard{display:none}
+.dash-header{background:#fff;padding:12px 24px;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.dash-header h1{color:#1a3a5c;font-size:1.2rem;white-space:nowrap}
+.tab-bar{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.tab-btn{padding:8px 18px;border:none;background:transparent;color:#555;font-size:.88rem;font-weight:600;cursor:pointer;border-radius:8px;transition:all .15s;white-space:nowrap}
+.tab-btn:hover{background:#eaf4fb;color:#2980b9}
+.tab-btn.active{background:#2980b9;color:#fff}
+.tab-btn:disabled{opacity:.4;cursor:not-allowed}
+.hdr-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#btn-reload,.hdr-btn{padding:6px 16px;background:#f0f2f5;border:1px solid #ccc;border-radius:8px;font-size:.82rem;cursor:pointer;white-space:nowrap}
+.hdr-btn.primary{background:#2980b9;border-color:#2980b9;color:#fff;font-weight:600}
+.hdr-btn.primary:hover{background:#1a6fa0}
+#sync-status{font-size:.78rem;font-weight:600;white-space:nowrap}
+.sync-ok{color:#16a34a}.sync-error{color:#c0392b;white-space:normal!important}.sync-pending{color:#2980b9}.sync-info{color:#64748b}
+.tab-page{display:none;padding:20px 24px;max-width:1400px;margin:0 auto}
+.tab-page.active{display:block}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.kpi .label{font-size:.78rem;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kpi .val{font-size:1.5rem;font-weight:700;color:#1a3a5c}
+.kpi .detail{font-size:.75rem;color:#888;margin-top:4px;line-height:1.4}
+.kpi .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700;margin-left:6px}
+.badge-green{background:#dcfce7;color:#1a6b3a}.badge-red{background:#fee2e2;color:#c0392b}.badge-gray{background:#f1f5f9;color:#64748b}
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:20px}
+.indic-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:.75rem;color:#555;justify-content:center}
+.indic-legend span{display:flex;align-items:center;gap:5px}
+.indic-legend i{display:inline-block;width:12px;height:12px;border-radius:2px;flex-shrink:0}
+.card h3{color:#1a3a5c;font-size:1rem;margin-bottom:4px}
+.card .card-desc{font-size:.78rem;color:#888;margin-bottom:14px;line-height:1.4}
+.card .chart-wrap{position:relative;height:380px}
+.card .chart-wrap.tall{height:500px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:900px){.row2{grid-template-columns:1fr}}
+.tbl-wrap{overflow-x:auto}
+table.dtbl{width:100%;border-collapse:collapse;font-size:.82rem}
+table.dtbl th{background:#f0f2f5;color:#1a3a5c;padding:10px 12px;text-align:left;position:sticky;top:0;font-weight:700;white-space:nowrap}
+table.dtbl td{padding:9px 12px;border-bottom:1px solid #f0f2f5}
+table.dtbl tr:nth-child(even){background:#fafafa}
+table.dtbl tr.partial{background:#fff8e1}
+.year-select{padding:6px 12px;border:1px solid #ccc;border-radius:8px;font-size:.88rem;font-weight:600;color:#1a3a5c;background:#fff;margin-left:12px}
+.section-bar{display:flex;align-items:center;margin-bottom:20px;gap:12px}
+.section-bar h2{color:#1a3a5c;font-size:1.1rem}
+</style>
+</head>
+<body>
+
+<!-- ════════════════ LOADER ════════════════ -->
+<div id="loader">
+<div class="load-box">
+  <h1>Dashboard Energético</h1>
+  <p class="sub">Multicentro — Análisis de Costos y Eficiencia</p>
+  <div class="drop-zone" id="drop-zone">
+    <div class="icon">📂</div>
+    <p>Arrastra tus archivos .xlsx aquí</p>
+  </div>
+  <input type="file" id="file-input" multiple accept=".xlsx,.xls" style="display:none">
+  <button id="btn-file" onclick="document.getElementById('file-input').click()">Seleccionar archivos</button>
+  <div class="file-list" id="file-list">
+    <div class="file-item" id="fl-costos"><span class="ck"></span><span class="fn">analisis-costos.xlsx</span></div>
+    <div class="file-item" id="fl-equipos"><span class="ck"></span><span class="fn">analisis-equipos.xlsx</span></div>
+    <div class="file-item" id="fl-solar"><span class="ck"></span><span class="fn">analisis-proyectos-solares.xlsx</span></div>
+    <div class="file-item" id="fl-chiller"><span class="ck"></span><span class="fn">analisis-costos-chiller.xlsx</span></div>
+    <div class="file-item" id="fl-indicadores"><span class="ck"></span><span class="fn">analisis-indicadores-globales.xlsx</span></div>
+  </div>
+  <button id="btn-go" onclick="launchDashboard()">Ver Dashboard</button>
+</div>
+</div>
+
+<!-- ════════════════ DASHBOARD ════════════════ -->
+<div id="dashboard">
+<div class="dash-header">
+  <h1>Dashboard Energético</h1>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('exec')" id="tb-exec">Resumen Ejecutivo</button>
+    <button class="tab-btn" onclick="showTab('equip')" id="tb-equip" disabled title="Archivo no cargado">Análisis de Equipos</button>
+    <button class="tab-btn" onclick="showTab('solar')" id="tb-solar" disabled title="Archivo no cargado">Proyectos Solares</button>
+    <button class="tab-btn" onclick="showTab('chiller')" id="tb-chiller" disabled title="Archivo no cargado">Costos Chiller</button>
+    <button class="tab-btn" onclick="showTab('indic')" id="tb-indic" disabled title="Archivo no cargado">Indicadores</button>
+  </div>
+  <div class="hdr-actions">
+    <span id="sync-status"></span>
+    <button class="hdr-btn" onclick="downloadSnapshot()" title="Descarga agent_snapshot.json con los datos de este dashboard">⬇ Descargar snapshot</button>
+    <button class="hdr-btn primary" onclick="syncSnapshot(event)" title="Envía los datos al asistente de voz · Shift+clic para cambiar servidor o clave">⟳ Sincronizar asistente</button>
+    <button id="btn-reload" onclick="location.reload()">↻ Recargar archivos</button>
+  </div>
+</div>
+
+<!-- Tab 1 -->
+<div class="tab-page active" id="page-exec">
+  <div class="kpi-grid" id="kpi-exec"></div>
+  <div class="row2">
+    <div class="card"><h3>Tendencia Mensual — Costo Eléctrico C/FV ($M)</h3><div class="chart-wrap"><canvas id="exec-c1"></canvas></div></div>
+    <div class="card"><h3>Tendencia Mensual — Consumo (MWh)</h3><div class="chart-wrap"><canvas id="exec-c3"></canvas></div></div>
+  </div>
+  <div class="card"><h3>Ranking de Sedes — Costo Eléctrico C/FV ($M)</h3><div class="chart-wrap tall"><canvas id="exec-c2"></canvas></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.75rem;color:#555;align-items:center;justify-content:center">
+      <span style="display:flex;align-items:center;gap:5px"><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#16a34a"></i> Reducción &gt;10%</span>
+      <span style="display:flex;align-items:center;gap:5px"><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#65a30d"></i> Leve reducción</span>
+      <span style="display:flex;align-items:center;gap:5px"><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#f59e0b"></i> Alza ≤10%</span>
+      <span style="display:flex;align-items:center;gap:5px"><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#f97316"></i> Alza 10–20%</span>
+      <span style="display:flex;align-items:center;gap:5px"><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#ef4444"></i> Alza &gt;20%</span>
+      <span style="display:flex;align-items:center;gap:5px"><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#6366f1"></i> Nueva / especial</span>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 2 -->
+<div class="tab-page" id="page-equip">
+  <div class="kpi-grid" id="kpi-equip"></div>
+  <div class="card"><h3>Consumo por Categoría y Tienda (MWh)</h3><p class="card-desc">Consumo anual estimado por auditoría energética, desglosado en 5 categorías de equipos.</p><div class="chart-wrap"><canvas id="equip-c1"></canvas></div></div>
+  <div class="row2">
+    <div class="card"><h3>Top 10 Equipos por Consumo</h3><p class="card-desc">Equipos con mayor consumo anual agregado. Variantes de nombre fusionadas.</p><div class="chart-wrap tall"><canvas id="equip-c2"></canvas></div></div>
+    <div class="card"><h3>Eficiencia Lumínica por Tienda (lm/W)</h3><p class="card-desc">Promedio ponderado por kWh. Línea de referencia a 80 lm/W.</p><div class="chart-wrap"><canvas id="equip-c3"></canvas></div></div>
+  </div>
+  <div class="card"><h3>Distribución por Tienda</h3><div class="tbl-wrap" id="equip-tbl"></div></div>
+</div>
+
+<!-- Tab 3 -->
+<div class="tab-page" id="page-solar">
+  <div class="kpi-grid" id="kpi-solar"></div>
+  <div class="row2">
+    <div class="card"><h3>% Ahorro Inyección sobre Costo S/FV</h3><p class="card-desc">Descuento GD (solo inyección) como porcentaje del costo eléctrico bruto (S/FV) de cada sede.</p><div class="chart-wrap tall"><canvas id="solar-c1"></canvas></div></div>
+    <div class="card"><h3>Distribución de Capacidad Instalada (kWp)</h3><p class="card-desc">Potencia peak de cada proyecto solar. Total: suma de kWp de los 12 proyectos.</p><div class="chart-wrap"><canvas id="solar-c3"></canvas></div></div>
+  </div>
+  <div class="card"><h3>% Ahorro Total Solar (Autoconsumo + Inyección)</h3><p class="card-desc">Ahorro total = autoconsumo valorizado a tarifa de red + descuento GD, como % del costo hipotético sin solar.</p><div class="chart-wrap tall"><canvas id="solar-c1b"></canvas></div></div>
+  <div class="card"><h3 id="solar-c2-title">Generación: Autoconsumo vs Inyección (MWh)</h3><p class="card-desc">Generación PFV real desglosada en autoconsumo (consumido in-situ) e inyección (vertida a la red). Fuente: cruce facturas CGE vs monitoreo PFV.</p><div class="chart-wrap"><canvas id="solar-c2"></canvas></div></div>
+  <div class="card"><h3 id="solar-c4-title">% Inyectado por Proyecto</h3><p class="card-desc">Porcentaje de la generación que se inyecta a la red. Valores altos indican que la planta genera más de lo que el local consume (posible sobredimensionamiento o bajo consumo).</p><div class="chart-wrap"><canvas id="solar-c4"></canvas></div></div>
+  <div class="card"><h3>Detalle de Proyectos Solares</h3><p class="card-desc">Ordenado por autoconsumo (mayor a menor). Filas en rojo tienen inconsistencia de datos (inyección > generación).</p><div class="tbl-wrap" id="solar-tbl"></div></div>
+
+  <h2 style="margin:28px 0 12px;font-size:1.3rem;color:#1e293b">Inversión y Recuperación</h2>
+  <div class="kpi-grid" id="kpi-solar-inv"></div>
+  <div class="row2">
+    <div class="card"><h3>¿Cómo va cada proyecto? — % Inversión Recuperada</h3><p class="card-desc">Generación acumulada ($) desde inicio vs inversión neta. Barra al 100% = inversión recuperada (payback).</p><div class="chart-wrap tall"><canvas id="solar-c5"></canvas></div>
+      <div class="indic-legend" id="leg-solar-c5"></div></div>
+    <div class="card"><h3>Rentabilidad Anual por Proyecto</h3><p class="card-desc">Rentabilidad anual como % de la inversión. Fuente: informe PFV Multicentro.</p><div class="chart-wrap tall"><canvas id="solar-c6"></canvas></div>
+      <div class="indic-legend" id="leg-solar-c6"></div></div>
+  </div>
+  <div class="card"><h3>Payback Proyectado vs Años Activa</h3><p class="card-desc">Comparación entre años de operación y payback total estimado. La barra azul muestra el avance, la gris el tiempo restante.</p><div class="chart-wrap tall"><canvas id="solar-c7"></canvas></div></div>
+  <div class="card"><h3>Detalle Inversión y Financiamiento</h3><p class="card-desc">Datos de inversión, payback, rentabilidad y empresa instaladora por proyecto.</p><div class="tbl-wrap" id="solar-inv-tbl"></div></div>
+</div>
+
+<!-- Tab 4 -->
+<div class="tab-page" id="page-chiller">
+  <div class="kpi-grid" id="kpi-chiller"></div>
+  <div class="row2">
+    <div class="card"><h3>Costo Mensual ($)</h3><div class="chart-wrap"><canvas id="chiller-c1"></canvas></div></div>
+    <div class="card"><h3>Consumo BTU Mensual</h3><div class="chart-wrap"><canvas id="chiller-c2"></canvas></div></div>
+  </div>
+  <div class="card"><h3>Participación % en Sistema</h3><div class="chart-wrap" style="height:260px"><canvas id="chiller-c3"></canvas></div></div>
+  <div class="card"><h3>Detalle Mensual Chiller</h3><div class="tbl-wrap" id="chiller-tbl"></div></div>
+</div>
+
+<!-- Tab 5 -->
+<div class="tab-page" id="page-indic">
+  <div class="section-bar">
+    <h2>Indicadores Energéticos</h2>
+    <select class="year-select" id="indic-year" onchange="renderIndicCharts()"></select>
+    <select class="year-select" id="indic-tipo" onchange="renderIndicCharts()">
+      <option value="Todas">Todas las tipologías</option>
+      <option value="A">A – Mall</option>
+      <option value="B">B – Calle corrido</option>
+      <option value="C">C – Calle con colación</option>
+      <option value="N/A">N/A – No retail</option>
+    </select>
+  </div>
+  <div class="kpi-grid" id="kpi-indic"></div>
+  <div class="row2">
+    <div class="card"><h3 id="indic-t1">kWh/m² por Sucursal</h3><div class="chart-wrap tall"><canvas id="indic-c1"></canvas></div><div id="indic-leg1" class="indic-legend"></div></div>
+    <div class="card"><h3 id="indic-t2">kWh/hora de operación</h3><div class="chart-wrap tall"><canvas id="indic-c2"></canvas></div><div id="indic-leg2" class="indic-legend"></div></div>
+  </div>
+  <div class="row2">
+    <div class="card"><h3 id="indic-t3">CLP/m² por Sucursal</h3><div class="chart-wrap tall"><canvas id="indic-c3"></canvas></div><div id="indic-leg3" class="indic-legend"></div></div>
+    <div class="card"><h3 id="indic-t4">tCO₂e por Localidad</h3><div class="chart-wrap tall"><canvas id="indic-c4"></canvas></div><div id="indic-leg4" class="indic-legend"></div></div>
+  </div>
+  <div class="card"><h3 id="indic-tbl-title">Tabla de Indicadores</h3><div class="tbl-wrap" id="indic-tbl"></div></div>
+</div>
+</div>
+
+<script>
+/* ══════════════ UTILITIES ══════════════ */
+function parseNum(s){
+  if(s==null)return 0;s=String(s).trim();
+  if(s===''||s==='$ -'||s==='-'||s==='NULL'||s==='NA')return 0;
+  s=s.replace(/\$/g,'').trim();
+  if(s.includes(',')&&s.includes('.')){s=s.replace(/\./g,'').replace(',','.');}
+  else if(s.includes(',')){s=s.replace(',','.');}
+  var n=parseFloat(s);return isNaN(n)?0:n;
+}
+function fCLP(v){return v.toLocaleString('es-CL');}
+function fDec(v,n){return(+v).toLocaleString('es-CL',{minimumFractionDigits:n,maximumFractionDigits:n});}
+function fM(v){return'$'+fDec(v/1e6,1)+' M';}
+function fPct(v){return(v>0?'+':'')+fDec(v,1)+'%';}
+function fMWh(kwh,n){return fDec(kwh/1000,n||0)+' MWh';}
+// Spoken forms for the voice agent (no "$" or "M" symbols)
+function sayM(v){return(v/1e6).toLocaleString('es-CL',{maximumFractionDigits:1})+' millones de pesos';}
+function sayPct(v){return(v>0?'más ':v<0?'menos ':'')+fDec(Math.abs(v),1)+' por ciento';}
+function consolidarLoc(loc){
+  loc=String(loc).trim();
+  if(loc==='San Javier 1'||loc==='San Javier 2')return'San Javier';
+  if(loc==='Curicó 1'||loc==='Curicó 2')return'Curicó';
+  return loc;
+}
+var MESES={'enero':1,'febrero':2,'marzo':3,'abril':4,'mayo':5,'junio':6,'julio':7,'agosto':8,'septiembre':9,'octubre':10,'noviembre':11,'diciembre':12};
+var MES_S=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+var CAT_BG={'Iluminación':'#f59e0b','Artefactos':'#3b82f6','Clima':'#06b6d4','Exhibición':'#8b5cf6','Servicios':'#94a3b8'};
+var chartInstances={};
+function makeChart(id,cfg){if(chartInstances[id])chartInstances[id].destroy();chartInstances[id]=new Chart(document.getElementById(id),cfg);}
+function badge(val){
+  if(val==null)return'<span class="badge badge-gray">nueva</span>';
+  var cls=val<=-1?'badge-green':val>=1?'badge-red':'badge-gray';
+  return'<span class="badge '+cls+'">'+fPct(val)+'</span>';
+}
+function kpiHTML(label,val,detail,bdg){
+  return'<div class="kpi"><div class="label">'+label+'</div><div class="val">'+val+(bdg||'')+'</div>'+(detail?'<div class="detail">'+detail+'</div>':'')+'</div>';
+}
+
+/* ══════════════ FILE LOADING ══════════════ */
+var DATA={costos:null,equipos:null,solar:null,chiller:null,indicadores:null};
+var FILES={}; // provenance per loaded file, exported in the snapshot
+var FILE_MAP=[
+  {key:'costos',match:function(n){return/costos/i.test(n)&&!/chiller/i.test(n)&&!/indicadores/i.test(n);},el:'fl-costos'},
+  {key:'equipos',match:function(n){return/equipos/i.test(n);},el:'fl-equipos'},
+  {key:'solar',match:function(n){return/solar/i.test(n);},el:'fl-solar'},
+  {key:'chiller',match:function(n){return/chiller/i.test(n);},el:'fl-chiller'},
+  {key:'indicadores',match:function(n){return/indicadores/i.test(n);},el:'fl-indicadores'}
+];
+function identifyFile(name){for(var i=0;i<FILE_MAP.length;i++){if(FILE_MAP[i].match(name))return FILE_MAP[i];}return null;}
+
+async function processFiles(files){
+  for(var i=0;i<files.length;i++){
+    var f=files[i];var info=identifyFile(f.name);if(!info)continue;
+    var buf=await f.arrayBuffer();var wb=XLSX.read(buf,{type:'array'});
+    if(info.key==='solar'){
+      var wsP=wb.Sheets['proyectos_solares']||wb.Sheets[wb.SheetNames[0]];
+      var wsI=wb.Sheets['inyeccion_anual']||wb.Sheets[wb.SheetNames[1]]||null;
+      var wsInv=wb.Sheets['inversion_payback']||null;
+      DATA.solar={proyectos:XLSX.utils.sheet_to_json(wsP,{defval:''}),inyeccion:wsI?XLSX.utils.sheet_to_json(wsI,{defval:''}):[],inversion:wsInv?XLSX.utils.sheet_to_json(wsInv,{defval:''}):[]};
+    }else if(info.key==='indicadores'){
+      var wsT=wb.Sheets['tiendas']||wb.Sheets[wb.SheetNames[0]];
+      var wsInd=wb.Sheets['indicadores']||wb.Sheets[wb.SheetNames[1]]||null;
+      DATA.indicadores={tiendas:XLSX.utils.sheet_to_json(wsT,{defval:''}),indicadores:wsInd?XLSX.utils.sheet_to_json(wsInd,{defval:''}):[]};
+    }else{
+      DATA[info.key]=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    }
+    var mainRows=info.key==='solar'?DATA.solar.proyectos:info.key==='indicadores'?DATA.indicadores.indicadores:DATA[info.key];
+    FILES[info.key]={file:f.name,sheets:wb.SheetNames.slice(),rows:mainRows.length};
+    var el=document.getElementById(info.el);el.classList.add('loaded');el.querySelector('.ck').textContent='✓';
+  }
+  if(DATA.costos)document.getElementById('btn-go').style.display='inline-block';
+}
+
+var dz=document.getElementById('drop-zone');
+dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',function(){dz.classList.remove('over');});
+dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('over');processFiles(e.dataTransfer.files);});
+document.getElementById('file-input').addEventListener('change',function(e){processFiles(e.target.files);});
+
+/* ══════════════ DASHBOARD LAUNCH ══════════════ */
+function showTab(name){
+  document.querySelectorAll('.tab-page').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('tb-'+name).classList.add('active');
+  if(name==='exec'&&!window._execDone)renderExec();
+  if(name==='equip'&&!window._equipDone&&DATA.equipos)renderEquip();
+  if(name==='solar'&&!window._solarDone&&DATA.solar)renderSolar();
+  if(name==='chiller'&&!window._chillerDone&&DATA.chiller)renderChiller();
+  if(name==='indic'&&!window._indicDone&&DATA.indicadores)renderIndic();
+}
+function launchDashboard(){
+  document.getElementById('loader').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  if(DATA.equipos){var b=document.getElementById('tb-equip');b.disabled=false;b.title='';}
+  if(DATA.solar){var b=document.getElementById('tb-solar');b.disabled=false;b.title='';}
+  if(DATA.chiller){var b=document.getElementById('tb-chiller');b.disabled=false;b.title='';}
+  if(DATA.indicadores){var b=document.getElementById('tb-indic');b.disabled=false;b.title='';}
+  renderExec();
+}
+
+/* ══════════════ TAB 1: RESUMEN EJECUTIVO ══════════════ */
+function processCostos(){
+  var rows=DATA.costos;var byLocYear={};var byYearMonth={};var years={};
+  rows.forEach(function(r){
+    var loc=consolidarLoc(r['Localidad']);
+    var anio=Math.round(parseNum(r['Año']));if(anio<2020||anio>2030)return;
+    var per=String(r['Período']||'').trim().toLowerCase();var mesN=MESES[per]||0;if(!mesN)return;
+    var kwh=parseNum(r['Electricidad Consumida (Kw/h)']);
+    var sfv=parseNum(r['Costo Eléctrico S/FV']);
+    var desc=parseNum(r['Descuentos del Mes Por Generación Distribuida']);
+    var cfv=parseNum(r['Costo Eléctrico C/FV']);
+    years[anio]=true;
+    var ky=loc+'|'+anio;
+    if(!byLocYear[ky])byLocYear[ky]={loc:loc,anio:anio,kwh:0,sfv:0,desc:0,cfv:0};
+    byLocYear[ky].kwh+=kwh;byLocYear[ky].sfv+=sfv;byLocYear[ky].desc+=desc;byLocYear[ky].cfv+=cfv;
+    var km=anio+'|'+mesN;
+    if(!byYearMonth[km])byYearMonth[km]={anio:anio,mes:mesN,kwh:0,cfv:0};
+    byYearMonth[km].kwh+=kwh;byYearMonth[km].cfv+=cfv;
+  });
+  var yearMonthCount={};
+  Object.keys(byYearMonth).forEach(function(k){var a=parseInt(k.split('|')[0]);yearMonthCount[a]=(yearMonthCount[a]||0)+1;});
+  var sortedYears=Object.keys(years).map(Number).sort();
+  var completeYears=sortedYears.filter(function(y){return yearMonthCount[y]>=11;});
+  return{byLocYear:byLocYear,byYearMonth:byYearMonth,years:sortedYears,completeYears:completeYears};
+}
+
+// Precio oficial promedio de energía (fuente: Resumen Multicentro kWh). Not derivable from billing.
+var PRECIO_KWH={2024:131.6,2025:159.9};
+var PRECIO_FUENTE='Resumen Multicentro kWh';
+// Prior-year cost below this is a "small base": its % change is flagged as misleading
+var SMALL_BASE_CLP=2e6;
+
+function computeExec(){
+  var d=processCostos();var cy=d.completeYears;
+  var lastY=cy[cy.length-1]||d.years[d.years.length-1];
+  var prevY=cy.length>=2?cy[cy.length-2]:null;
+
+  var totals={};
+  Object.values(d.byLocYear).forEach(function(v){
+    if(!totals[v.anio])totals[v.anio]={kwh:0,sfv:0,desc:0,cfv:0};
+    totals[v.anio].kwh+=v.kwh;totals[v.anio].sfv+=v.sfv;totals[v.anio].desc+=v.desc;totals[v.anio].cfv+=v.cfv;
+  });
+
+  var tLast=totals[lastY]||{kwh:0,cfv:0,desc:0};
+  var tPrev=prevY?totals[prevY]:null;
+  var chgCost=tPrev&&tPrev.cfv?((tLast.cfv-tPrev.cfv)/Math.abs(tPrev.cfv)*100):null;
+  var chgKwh=tPrev&&tPrev.kwh?((tLast.kwh-tPrev.kwh)/Math.abs(tPrev.kwh)*100):null;
+
+  // Ahorro solar: sum all years, count sedes with desc>0, list years included
+  var totalDesc=0;var descYears={};var descSedes={};
+  Object.values(d.byLocYear).forEach(function(v){
+    if(v.desc>0){totalDesc+=v.desc;descYears[v.anio]=true;descSedes[v.loc]=true;}
+  });
+  var descYearList=Object.keys(descYears).map(Number).sort();
+  var nSedesFV=Object.keys(descSedes).length;
+
+  var pxLast=PRECIO_KWH[lastY]||0;
+  var pxPrev=prevY?PRECIO_KWH[prevY]:null;
+  var pxChg=pxPrev?((pxLast-pxPrev)/pxPrev*100):null;
+
+  // Store ranking by cost C/FV in the last complete year
+  var ranking=[];var locs={};
+  Object.values(d.byLocYear).forEach(function(v){if(v.anio===lastY)locs[v.loc]=v;});
+  Object.keys(locs).forEach(function(loc){
+    var curr=locs[loc];var prev=prevY?d.byLocYear[loc+'|'+prevY]:null;
+    var chg=prev&&prev.cfv!==0?((curr.cfv-prev.cfv)/Math.abs(prev.cfv)*100):null;
+    ranking.push({s:loc,v:curr.cfv/1e6,chg:chg,curr:curr,prev:prev||null,
+      smallBase:!!(prev&&prev.cfv>0&&prev.cfv<SMALL_BASE_CLP)});
+  });
+  ranking.sort(function(a,b){return b.v-a.v;});
+
+  return{d:d,cy:cy,lastY:lastY,prevY:prevY,totals:totals,tLast:tLast,tPrev:tPrev,chgCost:chgCost,chgKwh:chgKwh,
+    totalDesc:totalDesc,descYearList:descYearList,nSedesFV:nSedesFV,pxLast:pxLast,pxPrev:pxPrev,pxChg:pxChg,ranking:ranking};
+}
+
+// KPI strings shared by the screen and the snapshot, so both show the same rounding
+function execKpiText(E){
+  var lastY=E.lastY,prevY=E.prevY,tLast=E.tLast,tPrev=E.tPrev;
+  return{
+    cost:fM(tLast.cfv),
+    costDetail:prevY?(''+prevY+': '+fM(tPrev.cfv)+' → '+lastY+': '+fM(tLast.cfv)):'',
+    kwh:fMWh(tLast.kwh),
+    kwhDetail:prevY?(''+prevY+': '+fMWh(tPrev.kwh)+' → '+lastY+': '+fMWh(tLast.kwh)):'',
+    solar:'$'+fCLP(Math.round(E.totalDesc/1e6))+' M',
+    solarDetail:E.descYearList.join(' + ')+' · '+E.nSedesFV+' sedes con FV',
+    price:'$'+fDec(E.pxLast,1),
+    priceDetail:(prevY&&E.pxPrev?(''+prevY+': $'+fDec(E.pxPrev,1)+' → '+lastY+': $'+fDec(E.pxLast,1)+' · '):'')+'Fuente: '+PRECIO_FUENTE
+  };
+}
+
+function renderExec(){
+  window._execDone=true;
+  var E=computeExec();var d=E.d,cy=E.cy,lastY=E.lastY,prevY=E.prevY;
+  var K=execKpiText(E);
+
+  document.getElementById('kpi-exec').innerHTML=
+    kpiHTML('Costo Eléctrico Total',K.cost,K.costDetail,badge(E.chgCost))+
+    kpiHTML('Consumo Red',K.kwh,K.kwhDetail,badge(E.chgKwh))+
+    kpiHTML('Ahorro Solar Acumulado',K.solar,K.solarDetail)+
+    kpiHTML('Precio oficial promedio energía',K.price,K.priceDetail,E.pxChg!=null?badge(E.pxChg):'');
+
+  // Chart 1: Monthly cost trend
+  var datasets=[];var colors=['#94a3b8','#2980b9','#f59e0b'];
+  cy.forEach(function(yr,i){
+    var vals=[];for(var m=1;m<=12;m++){var k=yr+'|'+m;vals.push(d.byYearMonth[k]?(d.byYearMonth[k].cfv/1e6):null);}
+    datasets.push({label:String(yr),data:vals,borderColor:colors[i%3],borderWidth:yr===lastY?2.5:1.5,pointRadius:3,
+      backgroundColor:yr===lastY?'rgba(41,128,185,0.07)':'transparent',tension:0.3,fill:yr===lastY});
+  });
+  makeChart('exec-c1',{type:'line',data:{labels:MES_S.slice(1),datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': $'+(c.parsed.y||0).toFixed(1)+' M';}}}},
+      scales:{y:{ticks:{callback:function(v){return'$'+v+' M';}},grid:{color:'#f0f2f5'}},x:{grid:{display:false}}}}});
+
+  // Chart 3: Monthly kWh trend
+  var dsKwh=[];
+  cy.forEach(function(yr,i){
+    var vals=[];for(var m=1;m<=12;m++){var k=yr+'|'+m;vals.push(d.byYearMonth[k]?(d.byYearMonth[k].kwh/1000):null);}
+    dsKwh.push({label:String(yr),data:vals,borderColor:yr===lastY?'#16a34a':'#94a3b8',borderWidth:yr===lastY?2.5:1.5,
+      pointRadius:3,backgroundColor:yr===lastY?'rgba(22,163,74,0.07)':'transparent',tension:0.3,fill:yr===lastY});
+  });
+  makeChart('exec-c3',{type:'line',data:{labels:MES_S.slice(1),datasets:dsKwh},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': '+(c.parsed.y||0).toFixed(1)+' MWh';}}}},
+      scales:{y:{ticks:{callback:function(v){return v+' MWh';}},grid:{color:'#f0f2f5'}},x:{grid:{display:false}}}}});
+
+  // Chart 2: Ranking
+  var ranking=E.ranking;
+  function barColor(chg,v){if(v<=0)return'#6366f1';if(chg==null)return'#94a3b8';if(chg<=-10)return'#16a34a';if(chg<=0)return'#65a30d';if(chg<=10)return'#f59e0b';if(chg<=20)return'#f97316';return'#ef4444';}
+  var rlabels=ranking.map(function(r){
+    if(r.v<=0)return r.s+'  ☀';if(r.chg==null)return r.s+'  (nueva)';
+    return r.s+'  '+(r.chg>=0?'▲':'▼')+fPct(r.chg)+(r.smallBase?' (base baja)':'');
+  });
+  makeChart('exec-c2',{type:'bar',data:{labels:rlabels,datasets:[{data:ranking.map(function(r){return r.v;}),
+    backgroundColor:ranking.map(function(r){return barColor(r.chg,r.v);}),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{title:function(it){return ranking[it[0].dataIndex].s;},label:function(c){return' $'+c.parsed.x.toFixed(1)+' M';}}}},
+      scales:{x:{ticks:{callback:function(v){return'$'+v+' M';}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});
+}
+
+/* ══════════════ TAB 2: ANÁLISIS DE EQUIPOS ══════════════ */
+var CAT_ORDER=['Iluminación','Artefactos','Clima','Exhibición','Servicios'];
+function computeEquip(){
+  var rows=DATA.equipos;
+  var byStore={};var byType={};var totalKwh=0;var totalQty=0;var lumWsum=0;var lumKwhSum=0;
+  var storeSet={};
+
+  rows.forEach(function(r){
+    var store=String(r['Tienda corregida']||r['Tienda']||'').trim();if(!store)return;
+    var cat=String(r['Categoría']||'').trim();
+    var kwh=parseNum(r['Consumo anual [kWh]']);
+    var qty=parseNum(r['Cantidad en operación (un)']);
+    var tipo2=String(r['Equipo/Tipo2']||r['Equipo/Tipo']||'').trim();
+    var lmw=parseNum(r['Eficiencia Luminarias [lm/W]']);
+    totalKwh+=kwh;totalQty+=qty;storeSet[store]=true;
+    if(!byStore[store])byStore[store]={kwh:0,cats:{},lumW:0,lumKwh:0,qty:0};
+    byStore[store].kwh+=kwh;byStore[store].qty+=qty;
+    byStore[store].cats[cat]=(byStore[store].cats[cat]||0)+kwh;
+    if(cat==='Iluminación'&&lmw>0){byStore[store].lumW+=lmw*kwh;byStore[store].lumKwh+=kwh;lumWsum+=lmw*kwh;lumKwhSum+=kwh;}
+    var tn=tipo2.replace(/\./g,'').replace(/\s+/g,' ');
+    if(!byType[tn])byType[tn]={kwh:0,qty:0,cat:cat};byType[tn].kwh+=kwh;byType[tn].qty+=qty;
+  });
+
+  var stores=Object.keys(byStore).sort(function(a,b){return byStore[b].kwh-byStore[a].kwh;});
+  var avgLmW=lumKwhSum>0?Math.round(lumWsum/lumKwhSum):0;
+  var topTypes=Object.entries(byType).sort(function(a,b){return b[1].kwh-a[1].kwh;});
+  var top1=topTypes[0];
+  var nStores=Object.keys(storeSet).length;
+
+  // Find dominant category
+  var catTotals={};
+  CAT_ORDER.forEach(function(c){catTotals[c]=0;});
+  stores.forEach(function(s){CAT_ORDER.forEach(function(c){catTotals[c]+=(byStore[s].cats[c]||0);});});
+  var topCat=CAT_ORDER.slice().sort(function(a,b){return catTotals[b]-catTotals[a];})[0];
+  var topCatPct=totalKwh>0?(catTotals[topCat]/totalKwh*100):0;
+
+  return{byStore:byStore,byType:byType,totalKwh:totalKwh,totalQty:totalQty,stores:stores,avgLmW:avgLmW,
+    topTypes:topTypes,top1:top1,nStores:nStores,catTotals:catTotals,topCat:topCat,topCatPct:topCatPct};
+}
+
+function equipKpiText(Q){
+  return{
+    total:fMWh(Q.totalKwh,1),totalDetail:Q.nStores+' tiendas auditadas',
+    qty:fCLP(Math.round(Q.totalQty)),
+    top:Q.top1?Q.top1[0].substring(0,28):'—',
+    topDetail:Q.top1?(fMWh(Q.top1[1].kwh,1)+' · '+fDec(Q.top1[1].kwh/Q.totalKwh*100,1)+'% del total'):'',
+    lmw:Q.avgLmW+' lm/W',lmwDetail:'Categoría dominante: '+Q.topCat+' ('+fDec(Q.topCatPct,1)+'%)'
+  };
+}
+
+function renderEquip(){
+  window._equipDone=true;
+  var Q=computeEquip();var byStore=Q.byStore,stores=Q.stores,topTypes=Q.topTypes;
+  var K=equipKpiText(Q);
+
+  document.getElementById('kpi-equip').innerHTML=
+    kpiHTML('Total Auditado',K.total,K.totalDetail)+
+    kpiHTML('Equipos en Operación',K.qty,CAT_ORDER.length+' categorías de equipos')+
+    kpiHTML('Mayor Consumidor',K.top,K.topDetail)+
+    kpiHTML('Efic. Lumínica Prom.',K.lmw,K.lmwDetail);
+
+  // Chart 1
+  makeChart('equip-c1',{type:'bar',data:{labels:stores,
+    datasets:CAT_ORDER.map(function(c){return{label:c,data:stores.map(function(s){return+((byStore[s].cats[c]||0)/1000).toFixed(1);}),backgroundColor:CAT_BG[c],borderRadius:3};})},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:12}},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': '+c.parsed.x.toFixed(1)+' MWh';}}}},
+      scales:{x:{stacked:true,ticks:{callback:function(v){return v+' MWh';}},grid:{color:'#f0f2f5'}},y:{stacked:true,grid:{display:false},ticks:{font:{size:11}}}}}});
+
+  // Chart 2
+  var t10=topTypes.slice(0,10);
+  makeChart('equip-c2',{type:'bar',data:{labels:t10.map(function(t){return t[0];}),
+    datasets:[{data:t10.map(function(t){return+(t[1].kwh/1000).toFixed(1);}),
+      backgroundColor:t10.map(function(t){return CAT_BG[t[1].cat]||'#94a3b8';}),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:function(c){var t=t10[c.dataIndex];return[' '+c.parsed.x.toFixed(1)+' MWh',' '+t[1].cat+' · '+fCLP(t[1].qty)+' un.'];}}}},
+      scales:{x:{ticks:{callback:function(v){return v+' MWh';}},grid:{color:'#f0f2f5'}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+
+  // Chart 3
+  var storesLum=stores.filter(function(s){return byStore[s].lumKwh>0;});
+  var lmVals=storesLum.map(function(s){return Math.round(byStore[s].lumW/byStore[s].lumKwh);});
+  makeChart('equip-c3',{type:'bar',data:{labels:storesLum,
+    datasets:[{label:'lm/W',data:lmVals,backgroundColor:lmVals.map(function(v){return v>=95?'#16a34a':v>=85?'#f59e0b':'#f97316';}),borderRadius:4},
+      {label:'Ref.',data:storesLum.map(function(){return 80;}),type:'line',borderColor:'#94a3b8',borderWidth:1.5,borderDash:[5,3],pointRadius:0,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{filter:function(it){return it.datasetIndex===0;},callbacks:{label:function(c){return' '+lmVals[c.dataIndex]+' lm/W';}}}},
+      scales:{y:{min:70,ticks:{callback:function(v){return v+' lm/W';}},grid:{color:'#f0f2f5'}},x:{grid:{display:false}}}}});
+
+  // Table
+  var html='<table class="dtbl"><thead><tr><th>Tienda</th><th style="text-align:right">kWh Total</th>';
+  CAT_ORDER.forEach(function(c){html+='<th style="text-align:right">'+c+' %</th>';});
+  html+='<th style="text-align:right">lm/W</th></tr></thead><tbody>';
+  stores.forEach(function(s){
+    var d=byStore[s];var lm=d.lumKwh>0?Math.round(d.lumW/d.lumKwh):'—';
+    html+='<tr><td style="font-weight:600">'+s+'</td><td style="text-align:right">'+fCLP(Math.round(d.kwh))+'</td>';
+    CAT_ORDER.forEach(function(c){var p=d.kwh>0?((d.cats[c]||0)/d.kwh*100).toFixed(1):'0.0';html+='<td style="text-align:right">'+p+'%</td>';});
+    html+='<td style="text-align:right">'+lm+'</td></tr>';
+  });
+  html+='</tbody></table>';document.getElementById('equip-tbl').innerHTML=html;
+}
+
+/* ══════════════ TAB 3: PROYECTOS SOLARES ══════════════ */
+function computeSolar(){
+  var projs=DATA.solar.proyectos;var inj=DATA.solar.inyeccion;
+
+  var yearCounts={};
+  inj.forEach(function(r){var a=parseNum(r['año'])||parseNum(r.anio);if(a)yearCounts[a]=(yearCounts[a]||0)+1;});
+  var injYears=Object.keys(yearCounts).map(Number).sort();
+  var bestY=injYears.filter(function(y){return yearCounts[y]>=10;});
+  var lastInjY=bestY.length>0?bestY[bestY.length-1]:(injYears[injYears.length-1]||2025);
+
+  var totalKwp=0;var totalPanels=0;
+  projs.forEach(function(p){totalKwp+=parseNum(p.potencia_kwp);totalPanels+=parseNum(p.cantidad_paneles);});
+
+  var injLast=inj.filter(function(r){return(parseNum(r['año'])||parseNum(r.anio))===lastInjY;});
+  var totalGen=0;var totalAuto=0;var totalIny=0;
+  injLast.forEach(function(r){totalGen+=parseNum(r.generacion_pfv_kwh);totalAuto+=parseNum(r.autoconsumo_kwh);totalIny+=parseNum(r.inyeccion_kwh);});
+
+  // Plant rows, sorted by autoconsumo desc (detail table order)
+  var tableData=projs.map(function(p){
+    var pn=String(p.proyecto||'');
+    var injR=injLast.find(function(r){return r.proyecto===pn;});
+    return{p:p,injR:injR,auto:injR?parseNum(injR.autoconsumo_kwh):0};
+  });
+  tableData.sort(function(a,b){return b.auto-a.auto;});
+
+  // Investment & payback
+  var inv=DATA.solar.inversion||[];
+  var totalInv=0;var totalAcum=0;
+  inv.forEach(function(r){totalInv+=parseNum(r.inversion_neto_clp);totalAcum+=parseNum(r.gen_total_acumulada_clp);});
+  var avgRent=inv.length?inv.reduce(function(a,r){return a+parseNum(r.rentabilidad_anual_pct);},0)/inv.length:0;
+  var recupProm=totalInv>0?(totalAcum/totalInv*100):0;
+
+  return{projs:projs,inj:inj,yearCounts:yearCounts,injYears:injYears,lastInjY:lastInjY,totalKwp:totalKwp,totalPanels:totalPanels,
+    injLast:injLast,totalGen:totalGen,totalAuto:totalAuto,totalIny:totalIny,tableData:tableData,
+    inv:inv,totalInv:totalInv,totalAcum:totalAcum,avgRent:avgRent,recupProm:recupProm};
+}
+
+function solarKpiText(S){
+  return{
+    kwp:fDec(S.totalKwp,1)+' kWp',kwpDetail:S.projs.length+' proyectos en operación',
+    panels:fCLP(Math.round(S.totalPanels)),
+    gen:fMWh(S.totalGen,1),
+    auto:fMWh(S.totalAuto,1),
+    autoDetail:S.totalGen>0?(fDec(S.totalAuto/S.totalGen*100,0)+'% autoconsumo · '+fDec(S.totalIny/S.totalGen*100,0)+'% inyección'):'',
+    inv:'$'+fCLP(Math.round(S.totalInv/1e6))+' M',
+    acum:'$'+fCLP(Math.round(S.totalAcum/1e6))+' M',
+    recup:fDec(S.recupProm,0)+'%',
+    rent:fDec(S.avgRent,1)+'%'
+  };
+}
+
+function renderSolar(){
+  window._solarDone=true;
+  var S=computeSolar();var K=solarKpiText(S);
+  var projs=S.projs,inj=S.inj,yearCounts=S.yearCounts,injYears=S.injYears,lastInjY=S.lastInjY,
+    totalKwp=S.totalKwp,injLast=S.injLast,tableData=S.tableData;
+
+  document.getElementById('kpi-solar').innerHTML=
+    kpiHTML('Total kWp Instalados',K.kwp,K.kwpDetail)+
+    kpiHTML('Total Paneles',K.panels,'Distribuidos en '+projs.length+' plantas')+
+    kpiHTML('Generación '+lastInjY,K.gen,'Producción real monitoreo PFV')+
+    kpiHTML('Autoconsumo '+lastInjY,K.auto,K.autoDetail);
+
+  // Chart 1: % Ahorro
+  var projMap={};
+  inj.forEach(function(r){
+    var p=String(r.proyecto||'').trim();var a=parseNum(r['año'])||parseNum(r.anio);
+    var pct=parseNum(r.pct_ahorro_sobre_sfv)*100;
+    if(!projMap[p])projMap[p]={};projMap[p][a]=pct;
+  });
+  var projNames=Object.keys(projMap).filter(function(p){return Object.values(projMap[p]).some(function(v){return v>0;});});
+  projNames.sort(function(a,b){return(projMap[a][lastInjY]||0)-(projMap[b][lastInjY]||0);});
+  var dsAhorro=[];var acolors=['rgba(148,163,184,0.8)','rgba(22,163,74,0.8)','rgba(245,158,11,0.8)'];
+  var ahorroYears=injYears.filter(function(y){return yearCounts[y]>=10;});
+  ahorroYears.forEach(function(yr,i){
+    dsAhorro.push({label:String(yr),data:projNames.map(function(p){return projMap[p][yr]||0;}),backgroundColor:acolors[i%3],borderWidth:1});
+  });
+  makeChart('solar-c1',{type:'bar',data:{labels:projNames.map(function(p){return p.replace('Multicentro ','');}),datasets:dsAhorro},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': '+c.parsed.x.toFixed(1)+'%';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+'%';}},grid:{color:'rgba(0,0,0,.05)'}},y:{ticks:{font:{size:11}}}}}});
+
+  // Chart 1b: % Ahorro Total Solar
+  var projMapT={};
+  inj.forEach(function(r){
+    var p=String(r.proyecto||'').trim();var a=parseNum(r['año'])||parseNum(r.anio);
+    var pct=parseNum(r.pct_ahorro_total_solar)*100;
+    if(!projMapT[p])projMapT[p]={};projMapT[p][a]=pct;
+  });
+  var projNamesT=Object.keys(projMapT).filter(function(p){return Object.values(projMapT[p]).some(function(v){return v>0;});});
+  projNamesT.sort(function(a,b){return(projMapT[a][lastInjY]||0)-(projMapT[b][lastInjY]||0);});
+  var dsAhorroT=[];
+  ahorroYears.forEach(function(yr,i){
+    dsAhorroT.push({label:String(yr),data:projNamesT.map(function(p){return projMapT[p][yr]||0;}),backgroundColor:acolors[i%3],borderWidth:1});
+  });
+  makeChart('solar-c1b',{type:'bar',data:{labels:projNamesT.map(function(p){return p.replace('Multicentro ','');}),datasets:dsAhorroT},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': '+c.parsed.x.toFixed(1)+'%';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+'%';}},grid:{color:'rgba(0,0,0,.05)'}},y:{ticks:{font:{size:11}}}}}});
+
+  // Chart 2: Gen = Auto + Inj
+  document.getElementById('solar-c2-title').textContent='Generación: Autoconsumo vs Inyección (MWh) — '+lastInjY;
+  var injSorted=injLast.filter(function(r){return parseNum(r.generacion_pfv_kwh)>0;});
+  injSorted.sort(function(a,b){return parseNum(b.generacion_pfv_kwh)-parseNum(a.generacion_pfv_kwh);});
+  makeChart('solar-c2',{type:'bar',data:{labels:injSorted.map(function(r){return String(r.proyecto||'').replace('Multicentro ','');}),
+    datasets:[
+      {label:'Autoconsumo',data:injSorted.map(function(r){return+(parseNum(r.autoconsumo_kwh)/1000).toFixed(1);}),backgroundColor:'rgba(22,163,74,0.8)',borderRadius:3},
+      {label:'Inyección',data:injSorted.map(function(r){return+(parseNum(r.inyeccion_kwh)/1000).toFixed(1);}),backgroundColor:'rgba(41,128,185,0.8)',borderRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': '+c.parsed.y.toFixed(1)+' MWh';}}}},
+      scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{callback:function(v){return v+' MWh';}},grid:{color:'rgba(0,0,0,.05)'}}}}});
+
+  // Chart 3: kWp doughnut
+  var dnutColors=['#2980b9','#16a34a','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#d35400','#27ae60','#e91e63','#607d8b','#795548','#94a3b8'];
+  makeChart('solar-c3',{type:'doughnut',data:{labels:projs.map(function(p){return String(p.proyecto||'').replace('Multicentro ','');}),
+    datasets:[{data:projs.map(function(p){return parseNum(p.potencia_kwp);}),backgroundColor:dnutColors,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:12}},
+      tooltip:{callbacks:{label:function(c){return' '+c.label+': '+c.parsed.toFixed(1)+' kWp ('+(c.parsed/totalKwp*100).toFixed(1)+'%)';}}}}}});
+
+  // Chart 4: % Inyectado
+  document.getElementById('solar-c4-title').textContent='% Inyectado por Proyecto — '+lastInjY;
+  var injPct=injLast.filter(function(r){return parseNum(r.pct_inyectado)>0;});
+  injPct.sort(function(a,b){return parseNum(a.pct_inyectado)-parseNum(b.pct_inyectado);});
+  var pctVals=injPct.map(function(r){return+(parseNum(r.pct_inyectado)*100).toFixed(1);});
+  makeChart('solar-c4',{type:'bar',data:{labels:injPct.map(function(r){return String(r.proyecto||'').replace('Multicentro ','');}),
+    datasets:[{data:pctVals,backgroundColor:pctVals.map(function(v){return v>=60?'#2980b9':v>=30?'#f59e0b':'#94a3b8';}),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:function(c){return' '+c.parsed.x.toFixed(1)+'% inyectado';}}}},
+      scales:{x:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'rgba(0,0,0,.05)'}},y:{ticks:{font:{size:11}}}}}});
+
+  // Table — sorted by autoconsumo desc
+  var html='<table class="dtbl"><thead><tr><th>Proyecto</th><th>Localidad</th><th>Propietario</th><th>Contrato</th><th style="text-align:right">kWp</th><th style="text-align:right">Paneles</th><th style="text-align:right">Generación MWh</th><th style="text-align:right">Inyección MWh</th><th style="text-align:right">Autoconsumo MWh</th><th style="text-align:right">% Inyectado</th><th style="text-align:right">% Ahorro Inyección</th><th style="text-align:right">% Ahorro Total</th><th>Estado</th></tr></thead><tbody>';
+  tableData.forEach(function(td){
+    var p=td.p;var injR=td.injR;
+    var gen=injR?parseNum(injR.generacion_pfv_kwh):0;
+    var iny=injR?parseNum(injR.inyeccion_kwh):0;
+    var auto=td.auto;
+    var pctI=injR?(parseNum(injR.pct_inyectado)*100):0;
+    var pctA=injR?(parseNum(injR.pct_ahorro_sobre_sfv)*100):0;
+    var pctT=injR?(parseNum(injR.pct_ahorro_total_solar)*100):0;
+    var consist=injR?String(injR.consistencia||''):'';
+    var style=consist==='REVISAR'?' style="background:#fff0f0"':'';
+    html+='<tr'+style+'><td style="font-weight:600">'+String(p.proyecto||'').replace('Multicentro ','')+'</td><td>'+p.localidad+'</td><td>'+p.propietario+'</td><td>'+p.tipo_contrato+'</td>';
+    html+='<td style="text-align:right">'+parseNum(p.potencia_kwp).toFixed(1)+'</td>';
+    html+='<td style="text-align:right">'+Math.round(parseNum(p.cantidad_paneles))+'</td>';
+    html+='<td style="text-align:right">'+(gen/1000).toFixed(1)+'</td>';
+    html+='<td style="text-align:right">'+(iny/1000).toFixed(1)+'</td>';
+    html+='<td style="text-align:right">'+(auto/1000).toFixed(1)+'</td>';
+    html+='<td style="text-align:right">'+pctI.toFixed(1)+'%</td>';
+    html+='<td style="text-align:right">'+pctA.toFixed(1)+'%</td>';
+    html+='<td style="text-align:right">'+pctT.toFixed(1)+'%</td>';
+    html+='<td>'+p.estado+'</td></tr>';
+  });
+  html+='</tbody></table>';document.getElementById('solar-tbl').innerHTML=html;
+
+  // ── Inversión y Recuperación ──
+  var inv=S.inv;
+  if(!inv.length)return;
+  var avgRent=S.avgRent;
+
+  document.getElementById('kpi-solar-inv').innerHTML=
+    kpiHTML('Inversión Total',K.inv,inv.length+' plantas · Incluye financiamiento')+
+    kpiHTML('Generación Acum.',K.acum,'Desde inicio de cada planta')+
+    kpiHTML('Recuperación Prom.',K.recup,'Generación acumulada / inversión')+
+    kpiHTML('Rentab. Anual Prom.',K.rent,'Promedio '+inv.length+' proyectos');
+
+  // Chart 5: % Inversión Recuperada (progress bars)
+  var invSorted=inv.slice().sort(function(a,b){return parseNum(a.pct_recuperado)-parseNum(b.pct_recuperado);});
+  var recupVals=invSorted.map(function(r){return+parseNum(r.pct_recuperado).toFixed(1);});
+  makeChart('solar-c5',{type:'bar',data:{labels:invSorted.map(function(r){return String(r.proyecto||'').replace('Multicentro ','');}),
+    datasets:[{data:recupVals,
+      backgroundColor:recupVals.map(function(v){return v>=100?'#16a34a':v>=50?'#2980b9':v>=30?'#f59e0b':'#ef4444';}),
+      borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      annotation:{annotations:{goal:{type:'line',scaleID:'x',value:100,borderColor:'rgba(22,163,74,0.6)',borderWidth:2,borderDash:[6,4],
+        label:{display:true,content:'100% Payback',position:'start',backgroundColor:'rgba(22,163,74,0.7)',font:{size:10},padding:3}}}},
+      tooltip:{callbacks:{label:function(c){var r=invSorted[c.dataIndex];return[' Recuperado: '+c.parsed.x.toFixed(1)+'%',' Inversión: $'+fCLP(Math.round(parseNum(r.inversion_neto_clp)/1e6))+' M',' Acumulado: $'+fCLP(Math.round(parseNum(r.gen_total_acumulada_clp)/1e6))+' M'];}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+'%';}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});
+  document.getElementById('leg-solar-c5').innerHTML=
+    '<span><i style="background:#16a34a"></i> ≥100% (recuperado)</span>'+
+    '<span><i style="background:#2980b9"></i> 50–99%</span>'+
+    '<span><i style="background:#f59e0b"></i> 30–49%</span>'+
+    '<span><i style="background:#ef4444"></i> &lt;30%</span>';
+
+  // Chart 6: Rentabilidad Anual
+  var rentSorted=inv.slice().sort(function(a,b){return parseNum(a.rentabilidad_anual_pct)-parseNum(b.rentabilidad_anual_pct);});
+  var rentVals=rentSorted.map(function(r){return parseNum(r.rentabilidad_anual_pct);});
+  var rentAvg=avgRent;
+  makeChart('solar-c6',{type:'bar',data:{labels:rentSorted.map(function(r){return String(r.proyecto||'').replace('Multicentro ','');}),
+    datasets:[{data:rentVals,backgroundColor:rentVals.map(function(v){return v>=20?'#16a34a':v>=12?'#2980b9':'#f59e0b';}),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      annotation:{annotations:{avg:{type:'line',scaleID:'x',value:rentAvg,borderColor:'rgba(100,100,100,0.45)',borderWidth:1.5,borderDash:[6,4],
+        label:{display:true,content:'Prom: '+rentAvg.toFixed(1)+'%',position:'end',backgroundColor:'rgba(60,60,60,0.7)',font:{size:10},padding:3}}}},
+      tooltip:{callbacks:{label:function(c){return' '+c.parsed.x.toFixed(1)+'% anual';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+'%';}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});
+  document.getElementById('leg-solar-c6').innerHTML=
+    '<span><i style="background:#16a34a"></i> ≥20% anual</span>'+
+    '<span><i style="background:#2980b9"></i> 12–19%</span>'+
+    '<span><i style="background:#f59e0b"></i> &lt;12%</span>';
+
+  // Chart 7: Payback — años activa vs payback total
+  var pbSorted=inv.slice().sort(function(a,b){return parseNum(a.payback_total_proyectado_anos)-parseNum(b.payback_total_proyectado_anos);});
+  makeChart('solar-c7',{type:'bar',data:{labels:pbSorted.map(function(r){return String(r.proyecto||'').replace('Multicentro ','');}),
+    datasets:[
+      {label:'Años activa',data:pbSorted.map(function(r){return parseNum(r.anos_activa);}),backgroundColor:'rgba(41,128,185,0.8)',borderRadius:3},
+      {label:'Años restantes',data:pbSorted.map(function(r){var pb=parseNum(r.payback_total_proyectado_anos);var act=parseNum(r.anos_activa);return Math.max(pb-act,0);}),backgroundColor:'rgba(148,163,184,0.5)',borderRadius:3}
+    ]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},
+      tooltip:{callbacks:{label:function(c){return' '+c.dataset.label+': '+c.parsed.x.toFixed(1)+' años';}}}},
+      scales:{x:{stacked:true,beginAtZero:true,ticks:{callback:function(v){return v+' años';}},grid:{color:'#f0f2f5'}},y:{stacked:true,ticks:{font:{size:11}},grid:{display:false}}}}});
+
+  // Investment table
+  var invTbl=inv.slice().sort(function(a,b){return parseNum(b.pct_recuperado)-parseNum(a.pct_recuperado);});
+  var ih='<table class="dtbl"><thead><tr><th>Proyecto</th><th>Empresa</th><th style="text-align:right">Inversión ($M)</th><th style="text-align:right">Potencia kW</th><th style="text-align:right">Generado 2025 ($M)</th><th style="text-align:right">Acumulado ($M)</th><th style="text-align:right">Recuperado</th><th style="text-align:right">Rentab. Anual</th><th style="text-align:right">Años Activa</th><th style="text-align:right">Payback Total</th><th>Estado</th></tr></thead><tbody>';
+  invTbl.forEach(function(r){
+    var pct=parseNum(r.pct_recuperado);
+    var pb0=parseNum(r.payback_a_0_anos);
+    var estado=pct>=100?'<span style="color:#16a34a;font-weight:700">✓ Recuperado</span>':'<span style="color:#2980b9">En curso</span>';
+    var rowStyle=pct>=100?' style="background:#f0fdf4"':'';
+    ih+='<tr'+rowStyle+'><td style="font-weight:600">'+String(r.proyecto||'').replace('Multicentro ','')+'</td>';
+    ih+='<td>'+r.empresa_instaladora+'</td>';
+    ih+='<td style="text-align:right">$'+fCLP(Math.round(parseNum(r.inversion_neto_clp)/1e6))+'</td>';
+    ih+='<td style="text-align:right">'+parseNum(r.potencia_instalada_kw)+'</td>';
+    ih+='<td style="text-align:right">$'+fCLP(Math.round(parseNum(r.generado_2025_clp)/1e6))+'</td>';
+    ih+='<td style="text-align:right">$'+fCLP(Math.round(parseNum(r.gen_total_acumulada_clp)/1e6))+'</td>';
+    ih+='<td style="text-align:right;font-weight:600;color:'+(pct>=100?'#16a34a':pct>=50?'#2980b9':'#f59e0b')+'">'+pct.toFixed(1)+'%</td>';
+    ih+='<td style="text-align:right">'+parseNum(r.rentabilidad_anual_pct).toFixed(1)+'%</td>';
+    ih+='<td style="text-align:right">'+parseNum(r.anos_activa).toFixed(1)+'</td>';
+    ih+='<td style="text-align:right">'+parseNum(r.payback_total_proyectado_anos).toFixed(1)+' años</td>';
+    ih+='<td>'+estado+'</td></tr>';
+  });
+  ih+='</tbody></table>';document.getElementById('solar-inv-tbl').innerHTML=ih;
+}
+
+/* ══════════════ TAB 4: COSTOS CHILLER ══════════════ */
+function computeChiller(){
+  var rows=DATA.chiller;
+  var D=rows.map(function(r){
+    return{periodo:String(r.periodo||'').trim(),anio:parseNum(r.anio),mes_num:parseNum(r.mes_num),
+      btu:parseNum(r.consumo_mes_btu),part:parseNum(r.indice_participacion_pct),
+      neto:parseNum(r.neto),iva:parseNum(r.iva),total:parseNum(r.total_a_pagar),
+      otros:String(r.otros_concepto||'').trim(),otros_m:parseNum(r.otros_monto)};
+  });
+  D.sort(function(a,b){return(a.anio*100+a.mes_num)-(b.anio*100+b.mes_num);});
+
+  var totalCost=0;var btuSum=0;var btuN=0;var partSum=0;var partN=0;
+  D.forEach(function(d){totalCost+=d.total;if(d.btu>0){btuSum+=d.btu;btuN++;}if(d.part>0){partSum+=d.part;partN++;}});
+  return{D:D,totalCost:totalCost,btuAvg:btuN>0?btuSum/btuN:0,btuN:btuN,partAvg:partN>0?partSum/partN:null};
+}
+
+function chillerKpiText(C){
+  var D=C.D;
+  return{
+    total:'$'+fCLP(Math.round(C.totalCost)),totalDetail:'Portal Centro Talca · '+D.length+' meses',
+    btu:fCLP(Math.round(C.btuAvg)),btuDetail:C.btuN+' meses activos de '+D.length,
+    part:C.partAvg!=null?fDec(C.partAvg,1)+'%':'—',
+    periods:D.length+' meses',periodsDetail:D.length>0?(D[0].periodo+' a '+D[D.length-1].periodo):''
+  };
+}
+
+function renderChiller(){
+  window._chillerDone=true;
+  var C=computeChiller();var D=C.D;var K=chillerKpiText(C);
+
+  document.getElementById('kpi-chiller').innerHTML=
+    kpiHTML('Costo Total Acumulado',K.total,K.totalDetail)+
+    kpiHTML('Consumo Prom. BTU/mes',K.btu,K.btuDetail)+
+    kpiHTML('Participación Prom.',K.part,'% del consumo total del sistema chiller')+
+    kpiHTML('Períodos',K.periods,K.periodsDetail);
+
+  var labels=D.map(function(d){return d.periodo.replace(' 20',"'");});
+
+  makeChart('chiller-c1',{type:'bar',data:{labels:labels,datasets:[{label:'Total ($)',data:D.map(function(d){return d.total;}),
+    backgroundColor:D.map(function(d){return d.total>0?'#2980b9':'#d1d5db';}),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:function(c){return' $'+fCLP(Math.round(c.parsed.y));}}}},
+      scales:{y:{ticks:{callback:function(v){return'$'+(v/1e6).toFixed(1)+' M';}},grid:{color:'#f0f0f0'}},x:{ticks:{font:{size:10},maxRotation:45}}}}});
+
+  makeChart('chiller-c2',{type:'bar',data:{labels:labels,datasets:[{label:'BTU',data:D.map(function(d){return d.btu;}),
+    backgroundColor:D.map(function(d){return d.btu>0?'#16a34a':'#d1d5db';}),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:function(c){return' '+fCLP(Math.round(c.parsed.y))+' BTU';}}}},
+      scales:{y:{ticks:{callback:function(v){return fCLP(v);}},grid:{color:'#f0f0f0'}},x:{ticks:{font:{size:10},maxRotation:45}}}}});
+
+  makeChart('chiller-c3',{type:'line',data:{labels:labels,datasets:[{label:'Part. %',data:D.map(function(d){return d.part;}),
+    borderColor:'#e67e22',backgroundColor:'rgba(230,126,34,.1)',tension:0.3,fill:true,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:function(c){return' '+c.parsed.y.toFixed(1)+'%';}}}},
+      scales:{y:{min:0,ticks:{callback:function(v){return v+'%';}},grid:{color:'#f0f0f0'}},x:{ticks:{font:{size:10},maxRotation:45}}}}});
+
+  var html='<table class="dtbl"><thead><tr><th>Período</th><th style="text-align:right">Consumo BTU</th><th style="text-align:right">Part. %</th><th style="text-align:right">Neto</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th>Observaciones</th></tr></thead><tbody>';
+  D.forEach(function(d){
+    var rb=d.total===0?' style="color:#aaa"':'';
+    var nStr=d.neto<0?'<span style="color:#16a34a">-$'+fCLP(Math.abs(d.neto))+'</span>':(d.neto?'$'+fCLP(d.neto):'—');
+    var oStr=d.otros?'<span style="color:#b45309;font-size:.75rem">'+d.otros+(d.otros_m?' $'+fCLP(Math.abs(d.otros_m)):'')+'</span>':'';
+    html+='<tr'+rb+'><td style="font-weight:600">'+d.periodo+'</td>';
+    html+='<td style="text-align:right">'+(d.btu>0?fCLP(Math.round(d.btu)):'—')+'</td>';
+    html+='<td style="text-align:right">'+(d.part>0?d.part.toFixed(1)+'%':'—')+'</td>';
+    html+='<td style="text-align:right">'+nStr+'</td>';
+    html+='<td style="text-align:right">'+(d.iva?'$'+fCLP(d.iva):'—')+'</td>';
+    html+='<td style="text-align:right;font-weight:600">'+(d.total>0?'$'+fCLP(Math.round(d.total)):'—')+'</td>';
+    html+='<td>'+oStr+'</td></tr>';
+  });
+  html+='</tbody></table>';document.getElementById('chiller-tbl').innerHTML=html;
+}
+
+/* ══════════════ TAB 5: INDICADORES ENERGÉTICOS ══════════════ */
+function renderIndic(){
+  window._indicDone=true;
+
+  // Populate year selector
+  var IY=indicYears();
+  var sel=document.getElementById('indic-year');
+  sel.innerHTML='';
+  IY.years.forEach(function(y){
+    var opt=document.createElement('option');opt.value=y;opt.textContent=y;sel.appendChild(opt);
+  });
+  sel.value=IY.defaultYear;
+
+  // Render charts + table for selected year/tipo
+  renderIndicCharts();
+}
+
+function indicYears(){
+  var ind=DATA.indicadores.indicadores;
+  var yearCounts={};
+  ind.forEach(function(r){var a=Math.round(parseNum(r['año']||r.anio));if(a)yearCounts[a]=(yearCounts[a]||0)+1;});
+  var years=Object.keys(yearCounts).map(Number).sort();
+  // Default to last complete year (>=15 entries)
+  var defY=years.filter(function(y){return yearCounts[y]>=15;});
+  return{years:years,defaultYear:defY.length>0?defY[defY.length-1]:years[years.length-1]};
+}
+
+function computeIndic(selY,selTipo){
+  var ind=DATA.indicadores.indicadores;
+  var lastData=ind.filter(function(r){
+    if(Math.round(parseNum(r['año']||r.anio))!==selY)return false;
+    if(selTipo!=='Todas'&&String(r.tipologia||'').trim()!==selTipo)return false;
+    return true;
+  });
+  var sucs=lastData.filter(function(r){return String(r.categoria||'').trim()==='Sucursal';});
+  var sucsM2=sucs.filter(function(r){return parseNum(r.kwh_total_por_m2||r.kwh_por_m2)>0;});
+
+  var avgKwhM2=0;var avgClpM2=0;var totalCo2=0;
+  if(sucsM2.length>0){
+    avgKwhM2=sucsM2.reduce(function(a,r){return a+parseNum(r.kwh_total_por_m2||r.kwh_por_m2);},0)/sucsM2.length;
+    avgClpM2=sucsM2.reduce(function(a,r){return a+parseNum(r.clp_por_m2);},0)/sucsM2.length;
+  }
+  lastData.forEach(function(r){totalCo2+=parseNum(r.tco2e);});
+
+  var isPartial=lastData.some(function(r){return String(r.nota||'').indexOf('Parcial')>=0;});
+  return{lastData:lastData,sucs:sucs,sucsM2:sucsM2,avgKwhM2:avgKwhM2,avgClpM2:avgClpM2,totalCo2:totalCo2,isPartial:isPartial};
+}
+
+function indicKpiText(N,selTipo){
+  var partialNote=N.isPartial?'Datos parciales — no anualizados':'Año completo (12 meses)';
+  var tipoLabel=selTipo==='Todas'?'':' · Tipo '+selTipo;
+  return{
+    kwhM2:fDec(N.avgKwhM2,1),kwhM2Detail:N.sucsM2.length+' sucursales con m² · '+partialNote,
+    co2:fDec(N.totalCo2,1)+' t',co2Detail:N.lastData.length+' localidades'+tipoLabel,
+    clpM2:'$'+fCLP(Math.round(N.avgClpM2)),clpM2Detail:N.sucsM2.length+' sucursales con m²'
+  };
+}
+
+function renderIndicCharts(){
+  var selY=parseInt(document.getElementById('indic-year').value);
+  var selTipo=document.getElementById('indic-tipo').value;
+  var N=computeIndic(selY,selTipo);var K=indicKpiText(N,selTipo);
+  var lastData=N.lastData,sucs=N.sucs,sucsM2=N.sucsM2;
+
+  document.getElementById('kpi-indic').innerHTML=
+    kpiHTML('kWh/m² Prom.',K.kwhM2,K.kwhM2Detail)+
+    kpiHTML('tCO₂e Total',K.co2,K.co2Detail)+
+    kpiHTML('CLP/m² Prom.',K.clpM2,K.clpM2Detail);
+
+  // Update chart titles with year
+  document.getElementById('indic-t1').textContent='kWh Total/m² por Sucursal — '+selY;
+  document.getElementById('indic-t2').textContent='kWh Total/hora de operación — '+selY;
+  document.getElementById('indic-t3').textContent='CLP/m² por Sucursal — '+selY;
+  document.getElementById('indic-t4').textContent='tCO₂e por Localidad — '+selY;
+
+  var tipoColors={'A':'#2980b9','B':'#16a34a','C':'#f59e0b','N/A':'#8b5cf6'};
+  var tipoLabels={'A':'A – Mall','B':'B – Calle corrido','C':'C – Calle con colación','N/A':'N/A – No retail'};
+  function tipoColor(r){return tipoColors[String(r.tipologia||'').trim()]||'#94a3b8';}
+  function avgLine(vals,label){
+    var sum=0;for(var i=0;i<vals.length;i++)sum+=vals[i];
+    var avg=vals.length?sum/vals.length:0;
+    return {annotations:{avg:{type:'line',scaleID:'x',value:avg,borderColor:'rgba(100,100,100,0.45)',borderWidth:1.5,borderDash:[6,4],
+      label:{display:true,content:'Prom: '+label(avg),position:'end',backgroundColor:'rgba(60,60,60,0.7)',font:{size:10},padding:3}}}};
+  }
+  function renderLegend(elId,dataRows){
+    var used={};dataRows.forEach(function(r){var t=String(r.tipologia||'').trim();if(t)used[t]=true;});
+    var html='';var keys=Object.keys(tipoLabels);
+    keys.forEach(function(k){if(used[k])html+='<span><i style="background:'+tipoColors[k]+'"></i> '+tipoLabels[k]+'</span>';});
+    document.getElementById(elId).innerHTML=html;
+  }
+
+  // Chart 1: kWh/m² (consumo total = red + autoconsumo)
+  var sm2=sucsM2.slice().sort(function(a,b){return parseNum(b.kwh_total_por_m2||b.kwh_por_m2)-parseNum(a.kwh_total_por_m2||a.kwh_por_m2);});
+  var km2Vals=sm2.map(function(r){return+parseNum(r.kwh_total_por_m2||r.kwh_por_m2).toFixed(1);});
+  makeChart('indic-c1',{type:'bar',data:{labels:sm2.map(function(r){return r.localidad;}),
+    datasets:[{data:km2Vals,backgroundColor:sm2.map(tipoColor),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:avgLine(km2Vals,function(v){return v.toFixed(1)+' kWh/m²';}),
+      tooltip:{callbacks:{label:function(c){return' '+c.parsed.x.toFixed(1)+' kWh/m² ('+sm2[c.dataIndex].tipologia+')';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+' kWh/m²';}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});
+  renderLegend('indic-leg1',sm2);
+
+  // Chart 2: kWh/h (consumo total = red + autoconsumo)
+  var sucsH=sucs.filter(function(r){return parseNum(r.kwh_total_por_hora_op||r.kwh_por_hora_op)>0;});
+  sucsH.sort(function(a,b){return parseNum(b.kwh_total_por_hora_op||b.kwh_por_hora_op)-parseNum(a.kwh_total_por_hora_op||a.kwh_por_hora_op);});
+  var khVals=sucsH.map(function(r){return+parseNum(r.kwh_total_por_hora_op||r.kwh_por_hora_op).toFixed(1);});
+  makeChart('indic-c2',{type:'bar',data:{labels:sucsH.map(function(r){return r.localidad;}),
+    datasets:[{data:khVals,backgroundColor:sucsH.map(tipoColor),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:avgLine(khVals,function(v){return v.toFixed(1)+' kWh/h';}),
+      tooltip:{callbacks:{label:function(c){return' '+c.parsed.x.toFixed(1)+' kWh/h ('+sucsH[c.dataIndex].tipologia+')';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+' kWh/h';}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});
+  renderLegend('indic-leg2',sucsH);
+
+  // Chart 3: CLP/m²
+  var cm2=sucsM2.slice().sort(function(a,b){return parseNum(b.clp_por_m2)-parseNum(a.clp_por_m2);});
+  var cm2Vals=cm2.map(function(r){return Math.round(parseNum(r.clp_por_m2));});
+  makeChart('indic-c3',{type:'bar',data:{labels:cm2.map(function(r){return r.localidad;}),
+    datasets:[{data:cm2Vals,backgroundColor:cm2.map(tipoColor),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:avgLine(cm2Vals,function(v){return'$'+fCLP(Math.round(v))+'/m²';}),
+      tooltip:{callbacks:{label:function(c){return' $'+fCLP(c.parsed.x)+'/m² ('+cm2[c.dataIndex].tipologia+')';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return'$'+fCLP(v);}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});
+  renderLegend('indic-leg3',cm2);
+
+  // Chart 4: tCO2e
+  var co2data=lastData.slice().sort(function(a,b){return parseNum(b.tco2e)-parseNum(a.tco2e);});
+  var co2Vals=co2data.map(function(r){return+parseNum(r.tco2e).toFixed(2);});
+  makeChart('indic-c4',{type:'bar',data:{labels:co2data.map(function(r){return r.localidad;}),
+    datasets:[{data:co2Vals,backgroundColor:co2data.map(tipoColor),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:avgLine(co2Vals,function(v){return v.toFixed(2)+' tCO₂e';}),
+      tooltip:{callbacks:{label:function(c){return' '+c.parsed.x.toFixed(2)+' tCO₂e ('+co2data[c.dataIndex].tipologia+')';}}}},
+      scales:{x:{beginAtZero:true,ticks:{callback:function(v){return v+' t';}},grid:{color:'#f0f2f5'}},y:{ticks:{font:{size:10}},grid:{display:false}}}}});
+  renderLegend('indic-leg4',co2data);
+
+  // Update table with same filters
+  var tblTitle='Tabla de Indicadores — '+selY+(selTipo!=='Todas'?' · Tipo '+selTipo:'');
+  document.getElementById('indic-tbl-title').textContent=tblTitle;
+  renderIndicTable(lastData);
+}
+
+function renderIndicTable(ind){
+  var allData=ind.slice().sort(function(a,b){
+    var la=String(a.localidad||''),lb=String(b.localidad||'');
+    if(la!==lb)return la.localeCompare(lb);
+    return parseNum(a['año']||a.anio)-parseNum(b['año']||b.anio);
+  });
+  var html='<table class="dtbl"><thead><tr><th>Localidad</th><th>Categoría</th><th>Tipo</th><th style="text-align:right">Año</th><th style="text-align:right">Meses</th><th style="text-align:right">kWh Red</th><th style="text-align:right">kWh Auto</th><th style="text-align:right">kWh Total</th><th style="text-align:right">kWh/m²</th><th style="text-align:right">kWh/h</th><th style="text-align:right">CLP/m²</th><th style="text-align:right">tCO₂e</th><th>Nota</th></tr></thead><tbody>';
+  allData.forEach(function(r){
+    var nota=String(r.nota||'').trim();
+    var cls=nota.indexOf('Parcial')>=0?' class="partial"':'';
+    var anio=Math.round(parseNum(r['año']||r.anio));
+    var kwhRed=parseNum(r.kwh);var kwhAuto=parseNum(r.kwh_autoconsumo);var kwhTotal=parseNum(r.kwh_consumo_total)||kwhRed;
+    html+='<tr'+cls+'><td style="font-weight:600">'+r.localidad+'</td><td>'+r.categoria+'</td><td>'+r.tipologia+'</td>';
+    html+='<td style="text-align:right">'+anio+'</td>';
+    html+='<td style="text-align:right">'+(parseNum(r.meses_datos)||'')+'</td>';
+    html+='<td style="text-align:right">'+fCLP(Math.round(kwhRed))+'</td>';
+    html+='<td style="text-align:right">'+(kwhAuto>0?fCLP(Math.round(kwhAuto)):'—')+'</td>';
+    html+='<td style="text-align:right;font-weight:600">'+fCLP(Math.round(kwhTotal))+'</td>';
+    var km=parseNum(r.kwh_total_por_m2||r.kwh_por_m2);html+='<td style="text-align:right">'+(km>0?km.toFixed(1):'—')+'</td>';
+    var kh=parseNum(r.kwh_total_por_hora_op||r.kwh_por_hora_op);html+='<td style="text-align:right">'+(kh>0?kh.toFixed(1):'—')+'</td>';
+    var cm=parseNum(r.clp_por_m2);html+='<td style="text-align:right">'+(cm>0?'$'+fCLP(Math.round(cm)):'—')+'</td>';
+    html+='<td style="text-align:right">'+parseNum(r.tco2e).toFixed(3)+'</td>';
+    html+='<td style="font-size:.78rem;color:#888">'+nota+'</td></tr>';
+  });
+  html+='</tbody></table>';document.getElementById('indic-tbl').innerHTML=html;
+}
+
+/* ══════════════ SNAPSHOT PARA ASISTENTE DE VOZ ══════════════ */
+// The voice agent only sees this JSON. It is built from the same compute*() functions
+// and *KpiText() strings the screen uses, so both always show the same numbers.
+var SNAPSHOT_SCHEMA_VERSION='1.0';
+// Extra names people (or speech-to-text) may use for a site
+var SITE_ALIASES={
+  'Portal Centro Talca':['Portal Centro','Talca Portal Centro','Talca Portal'],
+  'Go Florida Talca':['Go Florida','Florida'],
+  'OnTop Talca':['OnTop','On Top'],
+  'Gerencia Talca':['Casa Matriz','Gerencia'],
+  'Centro de Distribución 1':['CD Talca','CD 1','CD-10'],
+  'Centro de Distribución 2':['CD 2','CD-11']
+};
+var KNOWN_GAPS_STATIC=[
+  'No hay datos de ventas, flujo de clientes ni horas reales de operación por tienda.',
+  'El chiller de Portal Centro Talca se factura aparte y no está incluido en el costo eléctrico.',
+  'El ahorro solar acumulado corresponde a descuentos por inyección (GD) en las facturas; no incluye el ahorro por autoconsumo.'
+];
+
+function round1(v){return v==null||isNaN(v)?null:Math.round(v*10)/10;}
+function stripAccents(s){return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'');}
+function aliasesFor(name){
+  var out=[];
+  function add(a){a=String(a).trim();if(a&&a!==name&&out.indexOf(a)<0)out.push(a);}
+  add(String(name).replace(/^Multicentro\s+/,''));
+  add(stripAccents(name));
+  (SITE_ALIASES[name]||[]).forEach(function(a){add(a);add(stripAccents(a));});
+  return out;
+}
+function money(v){return{clp:Math.round(v),display:fM(v),say:sayM(v)};}
+function moneyDelta(v){
+  return{clp:Math.round(v),display:(v>=0?'+':'-')+fM(Math.abs(v)),
+    say:(v>=0?'aumento de ':'reducción de ')+sayM(Math.abs(v))};
+}
+function pctField(v){return v==null?null:{value:round1(v),display:fPct(v),say:sayPct(v)};}
+function pad2(n){return(n<10?'0':'')+n;}
+function isoLocal(d){
+  var off=-d.getTimezoneOffset();var sign=off>=0?'+':'-';off=Math.abs(off);
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+'T'+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds())+
+    sign+pad2(Math.floor(off/60))+':'+pad2(off%60);
+}
+
+function snapshotExec(E){
+  var K=execKpiText(E);var lastY=E.lastY,prevY=E.prevY;
+  var monthsByYear={};
+  Object.keys(E.d.byYearMonth).forEach(function(k){var p=k.split('|');(monthsByYear[p[0]]=monthsByYear[p[0]]||[]).push(+p[1]);});
+  Object.keys(monthsByYear).forEach(function(y){monthsByYear[y].sort(function(a,b){return a-b;});});
+  var partial={};
+  E.d.years.forEach(function(y){if(E.cy.indexOf(y)<0)partial[y]=monthsByYear[y]||[];});
+
+  var years={};
+  Object.keys(E.totals).forEach(function(y){
+    var t=E.totals[y];
+    years[y]={complete:E.cy.indexOf(+y)>=0,months:monthsByYear[y]||[],kwh:Math.round(t.kwh),
+      cost_sfv:money(t.sfv),gd_discount:money(t.desc),cost_cfv:money(t.cfv),kwh_display:fMWh(t.kwh)};
+  });
+
+  var stores=E.ranking.map(function(r,i){
+    var flags=[];var notes=[];
+    if(r.chg==null)flags.push('nueva');
+    if(r.v<=0)flags.push('costo_neto_negativo_por_solar');
+    if(r.smallBase){flags.push('base_baja');notes.push('El % de cambio es alto porque el costo del año anterior era bajo.');}
+    if(r.s==='Portal Centro Talca')notes.push('El chiller (climatización) se factura aparte y no está incluido.');
+    if(r.chg==null)notes.push('Sin datos de '+prevY+'; no se calcula variación.');
+    return{name:r.s,aliases:aliasesFor(r.s),year:lastY,rank_cost:i+1,
+      kwh:Math.round(r.curr.kwh),kwh_display:fMWh(r.curr.kwh),
+      cost_cfv:money(r.curr.cfv),cost_sfv:money(r.curr.sfv),gd_discount:money(r.curr.desc),
+      prev_year:prevY,prev_cost_cfv:r.prev?money(r.prev.cfv):null,
+      change_pct:pctField(r.chg),change_abs:r.prev?moneyDelta(r.curr.cfv-r.prev.cfv):null,
+      flags:flags,notes:notes};
+  });
+
+  function names(list){return list.map(function(s){return s.name;});}
+  var withPrev=stores.filter(function(s){return s.change_abs;});
+  var pctValid=stores.filter(function(s){return s.change_pct&&s.prev_cost_cfv.clp>0&&s.cost_cfv.clp>0;});
+  var rankings={
+    metric_year:lastY,
+    cost_cfv_desc:names(stores),
+    kwh_desc:names(stores.slice().sort(function(a,b){return b.kwh-a.kwh;})),
+    increase_abs_desc:names(withPrev.slice().sort(function(a,b){return b.change_abs.clp-a.change_abs.clp;})),
+    increase_pct_desc:names(pctValid.slice().sort(function(a,b){return b.change_pct.value-a.change_pct.value;})),
+    increase_pct_desc_excluding_small_base:names(pctValid.filter(function(s){return s.flags.indexOf('base_baja')<0;})
+      .sort(function(a,b){return b.change_pct.value-a.change_pct.value;}))
+  };
+
+  return{
+    periods:{years:E.d.years,complete_years:E.cy,partial_years:partial,last_complete_year:lastY,previous_year:prevY},
+    exec:{
+      year:lastY,prev_year:prevY,
+      cost_cfv:money(E.tLast.cfv),prev_cost_cfv:E.tPrev?money(E.tPrev.cfv):null,
+      kwh:{value:Math.round(E.tLast.kwh),display:K.kwh},prev_kwh:E.tPrev?{value:Math.round(E.tPrev.kwh),display:fMWh(E.tPrev.kwh)}:null,
+      change:{cost_pct:pctField(E.chgCost),kwh_pct:pctField(E.chgKwh),price_pct:pctField(E.pxChg)},
+      solar_discount_accumulated:{clp:Math.round(E.totalDesc),display:K.solar,
+        say:fCLP(Math.round(E.totalDesc/1e6))+' millones de pesos',years:E.descYearList,sites:E.nSedesFV},
+      kpi_cards:[
+        {label:'Costo Eléctrico Total',value:K.cost,detail:K.costDetail,badge:E.chgCost!=null?fPct(E.chgCost):'nueva'},
+        {label:'Consumo Red',value:K.kwh,detail:K.kwhDetail,badge:E.chgKwh!=null?fPct(E.chgKwh):'nueva'},
+        {label:'Ahorro Solar Acumulado',value:K.solar,detail:K.solarDetail},
+        {label:'Precio oficial promedio energía',value:K.price,detail:K.priceDetail,badge:E.pxChg!=null?fPct(E.pxChg):null}
+      ],
+      years:years
+    },
+    stores:stores,
+    rankings:rankings
+  };
+}
+
+function snapshotSolar(){
+  var S=computeSolar();var K=solarKpiText(S);
+  var invBy={};S.inv.forEach(function(r){invBy[String(r.proyecto||'').trim()]=r;});
+  var plants=S.tableData.map(function(td){
+    var p=td.p,r=td.injR,name=String(p.proyecto||'').trim(),iv=invBy[name];
+    return{name:name,aliases:aliasesFor(name),localidad:p.localidad,owner:p.propietario,contract:p.tipo_contrato,status:p.estado,
+      kwp:parseNum(p.potencia_kwp),panels:Math.round(parseNum(p.cantidad_paneles)),
+      year:S.lastInjY,
+      generation_kwh:r?Math.round(parseNum(r.generacion_pfv_kwh)):null,
+      injection_kwh:r?Math.round(parseNum(r.inyeccion_kwh)):null,
+      self_consumption_kwh:r?Math.round(parseNum(r.autoconsumo_kwh)):null,
+      pct_injected:r?round1(parseNum(r.pct_inyectado)*100):null,
+      pct_savings_injection:r?round1(parseNum(r.pct_ahorro_sobre_sfv)*100):null,
+      pct_savings_total:r?round1(parseNum(r.pct_ahorro_total_solar)*100):null,
+      consistency:r?String(r.consistencia||''):'',
+      investment:iv?money(parseNum(iv.inversion_neto_clp)):null,
+      installer:iv?iv.empresa_instaladora:null,
+      years_active:iv?round1(parseNum(iv.anos_activa)):null,
+      payback_total_years:iv?round1(parseNum(iv.payback_total_proyectado_anos)):null,
+      pct_recovered:iv?round1(parseNum(iv.pct_recuperado)):null,
+      annual_return_pct:iv?round1(parseNum(iv.rentabilidad_anual_pct)):null};
+  });
+  var withPb=plants.filter(function(p){return p.payback_total_years!=null;});
+  return{
+    year:S.lastInjY,plants_count:S.projs.length,
+    kwp_total:round1(S.totalKwp),panels_total:Math.round(S.totalPanels),
+    generation_kwh:Math.round(S.totalGen),self_consumption_kwh:Math.round(S.totalAuto),injection_kwh:Math.round(S.totalIny),
+    investment_total:money(S.totalInv),generation_accumulated:money(S.totalAcum),
+    pct_recovered_avg:round1(S.recupProm),annual_return_avg_pct:round1(S.avgRent),
+    kpi_cards:[
+      {label:'Total kWp Instalados',value:K.kwp,detail:K.kwpDetail},
+      {label:'Total Paneles',value:K.panels},
+      {label:'Generación '+S.lastInjY,value:K.gen,detail:'Producción real monitoreo PFV'},
+      {label:'Autoconsumo '+S.lastInjY,value:K.auto,detail:K.autoDetail},
+      {label:'Inversión Total',value:K.inv},
+      {label:'Generación Acum.',value:K.acum},
+      {label:'Recuperación Prom.',value:K.recup},
+      {label:'Rentab. Anual Prom.',value:K.rent}
+    ],
+    plants:plants,
+    rankings:{
+      payback_longest_first:withPb.slice().sort(function(a,b){return b.payback_total_years-a.payback_total_years;}).map(function(p){return p.name;}),
+      generation_desc:plants.slice().sort(function(a,b){return(b.generation_kwh||0)-(a.generation_kwh||0);}).map(function(p){return p.name;})
+    },
+    flagged_review:plants.filter(function(p){return p.consistency==='REVISAR';}).map(function(p){return p.name;})
+  };
+}
+
+function snapshotChiller(){
+  var C=computeChiller();var K=chillerKpiText(C);
+  var byYear={};
+  C.D.forEach(function(d){var y=d.anio;if(!byYear[y])byYear[y]={total_clp:0,btu:0,months:0};byYear[y].total_clp+=d.total;byYear[y].btu+=d.btu;byYear[y].months++;});
+  Object.keys(byYear).forEach(function(y){var b=byYear[y];b.total=money(b.total_clp);b.total_clp=Math.round(b.total_clp);b.btu=Math.round(b.btu);});
+  return{
+    site:'Portal Centro Talca',
+    note:'Climatización distrital facturada por BTU, aparte de la factura eléctrica.',
+    total_accumulated:money(C.totalCost),btu_avg_month:Math.round(C.btuAvg),active_months:C.btuN,
+    participation_avg_pct:round1(C.partAvg),
+    kpi_cards:[
+      {label:'Costo Total Acumulado',value:K.total,detail:K.totalDetail},
+      {label:'Consumo Prom. BTU/mes',value:K.btu,detail:K.btuDetail},
+      {label:'Participación Prom.',value:K.part},
+      {label:'Períodos',value:K.periods,detail:K.periodsDetail}
+    ],
+    by_year:byYear,
+    months:C.D.map(function(d){return{period:d.periodo,year:d.anio,month:d.mes_num,btu:Math.round(d.btu),
+      participation_pct:round1(d.part),net_clp:Math.round(d.neto),total_clp:Math.round(d.total),other:d.otros||null};})
+  };
+}
+
+function snapshotEquip(){
+  var Q=computeEquip();var K=equipKpiText(Q);
+  return{
+    note:'Consumo anual ESTIMADO por auditoría energética en '+Q.nStores+' tiendas; no es consumo facturado.',
+    total_kwh:Math.round(Q.totalKwh),equipment_count:Math.round(Q.totalQty),avg_lm_w:Q.avgLmW,
+    dominant_category:Q.topCat,dominant_category_pct:round1(Q.topCatPct),
+    category_kwh:Object.keys(Q.catTotals).reduce(function(o,c){o[c]=Math.round(Q.catTotals[c]);return o;},{}),
+    kpi_cards:[
+      {label:'Total Auditado',value:K.total,detail:K.totalDetail},
+      {label:'Equipos en Operación',value:K.qty},
+      {label:'Mayor Consumidor',value:K.top,detail:K.topDetail},
+      {label:'Efic. Lumínica Prom.',value:K.lmw,detail:K.lmwDetail}
+    ],
+    stores:Q.stores.map(function(s){var b=Q.byStore[s];
+      return{name:s,aliases:aliasesFor(s),kwh:Math.round(b.kwh),equipment_count:Math.round(b.qty),
+        lm_w:b.lumKwh>0?Math.round(b.lumW/b.lumKwh):null,
+        category_kwh:Object.keys(b.cats).reduce(function(o,c){o[c]=Math.round(b.cats[c]);return o;},{})};}),
+    top_equipment:Q.topTypes.slice(0,10).map(function(t){return{name:t[0],category:t[1].cat,kwh:Math.round(t[1].kwh),qty:Math.round(t[1].qty)};})
+  };
+}
+
+function snapshotIndic(){
+  var IY=indicYears();var byYear={};
+  IY.years.forEach(function(y){
+    var N=computeIndic(y,'Todas');var K=indicKpiText(N,'Todas');
+    byYear[y]={partial:N.isPartial,
+      kpi_cards:[
+        {label:'kWh/m² Prom.',value:K.kwhM2,detail:K.kwhM2Detail},
+        {label:'tCO₂e Total',value:K.co2,detail:K.co2Detail},
+        {label:'CLP/m² Prom.',value:K.clpM2,detail:K.clpM2Detail}
+      ],
+      sites:N.lastData.map(function(r){
+        var km=parseNum(r.kwh_total_por_m2||r.kwh_por_m2),kh=parseNum(r.kwh_total_por_hora_op||r.kwh_por_hora_op),cm=parseNum(r.clp_por_m2);
+        return{name:String(r.localidad||'').trim(),category:String(r.categoria||'').trim(),typology:String(r.tipologia||'').trim(),
+          months:parseNum(r.meses_datos)||null,kwh_grid:Math.round(parseNum(r.kwh)),kwh_total:Math.round(parseNum(r.kwh_consumo_total)||parseNum(r.kwh)),
+          kwh_per_m2:km>0?round1(km):null,kwh_per_hour:kh>0?round1(kh):null,clp_per_m2:cm>0?Math.round(cm):null,
+          tco2e:Math.round(parseNum(r.tco2e)*1000)/1000,note:String(r.nota||'').trim()||null};
+      }),
+      missing_m2:N.sucs.filter(function(r){return!(parseNum(r.kwh_total_por_m2||r.kwh_por_m2)>0);}).map(function(r){return String(r.localidad||'').trim();})
+    };
+  });
+  return{default_year:IY.defaultYear,note:'kWh total = red + autoconsumo solar.',by_year:byYear};
+}
+
+function buildSnapshot(){
+  if(!DATA.costos)throw new Error('Cargue analisis-costos.xlsx antes de generar el snapshot.');
+  var now=new Date();
+  var E=computeExec();var X=snapshotExec(E);
+  var snap={
+    schema_version:SNAPSHOT_SCHEMA_VERSION,
+    generator:'dashboard.html',
+    generated_at:isoLocal(now),
+    generated_local:{date:pad2(now.getDate())+'-'+pad2(now.getMonth()+1)+'-'+now.getFullYear(),time:pad2(now.getHours())+':'+pad2(now.getMinutes())},
+    locale:'es-CL',
+    sources:Object.keys(FILES).map(function(k){return{key:k,file:FILES[k].file,sheets:FILES[k].sheets,rows:FILES[k].rows};}),
+    official_price_clp_kwh:Object.assign({},PRECIO_KWH,{source:PRECIO_FUENTE,
+      note:'Precio oficial promedio de energía. No se calcula a partir de las facturas (costo total / kWh da otro valor).'}),
+    periods:X.periods,
+    exec:X.exec,
+    stores:X.stores,
+    rankings:X.rankings,
+    solar:DATA.solar?snapshotSolar():null,
+    chiller:DATA.chiller?snapshotChiller():null,
+    equipment:DATA.equipos?snapshotEquip():null,
+    indicators:DATA.indicadores?snapshotIndic():null,
+    known_gaps:KNOWN_GAPS_STATIC.slice()
+  };
+  Object.keys(X.periods.partial_years).forEach(function(y){
+    var m=X.periods.partial_years[y];
+    snap.known_gaps.push(y+' es un año parcial ('+m.length+' meses: '+m.map(function(n){return MES_S[n];}).join(', ')+'); no se compara con años completos.');
+  });
+  var nuevas=X.stores.filter(function(s){return s.flags.indexOf('nueva')>=0;}).map(function(s){return s.name;});
+  if(nuevas.length)snap.known_gaps.push('Sin datos de '+X.periods.previous_year+' para: '+nuevas.join(', ')+'.');
+  if(snap.indicators){
+    var iy=snap.indicators.by_year[X.periods.last_complete_year]||snap.indicators.by_year[snap.indicators.default_year];
+    var miss=iy.missing_m2;
+    if(miss.length)snap.known_gaps.push('Sin m² para: '+miss.join(', ')+'; no hay indicadores por m² para ellas.');
+  }
+  FILE_MAP.forEach(function(f){if(!DATA[f.key])snap.known_gaps.push('Archivo no cargado: '+document.getElementById(f.el).querySelector('.fn').textContent+'.');});
+  return snap;
+}
+
+function downloadSnapshot(){
+  try{
+    var snap=buildSnapshot();
+    var blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='agent_snapshot.json';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+    setSyncStatus('info','Snapshot descargado · '+snap.generated_local.time);
+  }catch(e){
+    console.error('[Snapshot] build failed',e);
+    setSyncStatus('error','No se pudo generar el snapshot: '+e.message);
+  }
+}
+
+// Voice server URL is remembered per browser; the passcode only lives in memory for this session
+var VOICE_URL_KEY='mc_voice_url';
+var voicePasscode=null;
+function getVoiceUrl(force){
+  var u=null;
+  try{u=localStorage.getItem(VOICE_URL_KEY);}catch(e){u=null;}
+  if(!u||force){
+    u=prompt('URL del servidor del asistente (ej. https://multicentro-voz.fly.dev):',u||'');
+    if(!u)return null;
+    u=u.trim().replace(/\/+$/,'');
+    try{localStorage.setItem(VOICE_URL_KEY,u);}catch(e){console.warn('[Snapshot] could not remember voice URL',e);}
+  }
+  return u;
+}
+async function syncSnapshot(ev){
+  var force=!!(ev&&ev.shiftKey); // Shift+clic: cambiar servidor y clave
+  var url=getVoiceUrl(force);if(!url)return;
+  if(!voicePasscode||force){voicePasscode=prompt('Clave del asistente:');if(!voicePasscode)return;}
+  setSyncStatus('pending','Sincronizando…');
+  try{
+    var snap=buildSnapshot();
+    var res=await fetch(url+'/snapshot',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+voicePasscode},body:JSON.stringify(snap)});
+    if(res.status===401||res.status===403){voicePasscode=null;throw new Error('clave rechazada');}
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    setSyncStatus('ok','Asistente actualizado ✓ '+snap.generated_local.time+' · '+snap.sources.length+' archivos');
+  }catch(e){
+    console.error('[Snapshot] sync failed',e);
+    setSyncStatus('error','No se pudo sincronizar ('+e.message+'). Use "Descargar snapshot".');
+  }
+}
+function setSyncStatus(kind,text){
+  var el=document.getElementById('sync-status');el.className='sync-'+kind;el.textContent=text;
+}
+</script>
+</body>
+</html>

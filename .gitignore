@@ -1,0 +1,14 @@
+# Client data: this repo is public. Remove this line only if the data is
+# approved for publication or the repo is made private.
+data/
+
+# Snapshots exported from the dashboard contain the same client figures
+agent_snapshot*.json
+
+# Secrets
+.env
+.env.*
+
+# OS / Office lock files
+.DS_Store
+~$*
