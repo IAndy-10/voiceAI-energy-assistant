@@ -1,0 +1,4 @@
+*
+!requirements.txt
+!voice_server/
+voice_server/__pycache__/

@@ -1,0 +1,38 @@
+# One always-on machine near the speech and LLM APIs, with a volume so the
+# snapshot survives restarts. Secrets go in `fly secrets set` (see .env.example).
+app = "multicentro-voz"
+primary_region = "iad"
+
+[env]
+  SNAPSHOT_PATH = "/data/agent_snapshot.json"
+  PUBLIC_HOST = "multicentro-voz.fly.dev"
+  STT_PROVIDER = "deepgram"
+  TTS_PROVIDER = "azure"
+  AZURE_SPEECH_REGION = "eastus"
+  AZURE_TTS_VOICE = "es-CL-CatalinaNeural"
+  LLM_MODEL = "claude-sonnet-5-5"
+  LLM_EFFORT = "low"
+  LLM_THINKING = "adaptive"
+  MAX_CALL_SECS = "600"
+
+[mounts]
+  source = "snapshot_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/status"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
