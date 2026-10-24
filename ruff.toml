@@ -1,0 +1,9 @@
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "B", "I", "UP", "SIM"]
+
+[lint.per-file-ignores]
+# Fixture data reads better one record per line
+"tests/conftest.py" = ["E501"]
