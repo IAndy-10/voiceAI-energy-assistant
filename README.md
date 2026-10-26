@@ -84,10 +84,17 @@ in silence, so check it after every test call on demo day.
 
 ## Status
 
+*Updated 2026-10-23.*
+
 - [x] Dashboard with snapshot export and sync
-- [x] Voice server: Twilio → Pipecat (STT → LLM with tools → TTS)
+- [x] Voice server code: Twilio → Pipecat (STT → LLM with tools → TTS), 96 offline tests passing
+- [x] Tools checked against a real snapshot: they return the spec §8 answer key
+- [ ] Accounts and keys: Twilio, Deepgram, Azure Speech, ElevenLabs, Anthropic, Fly.io
+- [ ] Docker image built and deployed to Fly.io
+- [ ] Twilio number bought, webhook set to `/twilio/voice`, caller allowlist set
 - [ ] Speech provider test on a real phone line (spec §7.4)
-- [ ] Text harness 10/10 per question with the real snapshot and API key
+- [ ] Text harness 10/10 per question with the real snapshot and an API key
 - [ ] End-to-end phone rehearsal
+- [ ] Repo made private (the spec contains client figures)
 
 See the spec for architecture, scripted questions and the plan.
