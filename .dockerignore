@@ -1,0 +1,25 @@
+# Private client data and generated snapshots
+Datos/
+data/
+*.xlsx
+*.xls
+agent_snapshot*.json
+m02_verification*.json
+
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+.git/
+.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+
+# Development-only artifacts
+.agents/
+.codex/
+tests/
+scripts/
+docs/
+README.md

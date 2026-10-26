@@ -4,6 +4,7 @@ data/
 
 # Snapshots exported from the dashboard contain the same client figures
 agent_snapshot*.json
+m02_verification*.json
 
 # Secrets
 .env
@@ -12,3 +13,15 @@ agent_snapshot*.json
 # OS / Office lock files
 .DS_Store
 ~$*
+
+/Datos/
+/data/
+*.xlsx
+*.xls
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
