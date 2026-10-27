@@ -137,9 +137,10 @@ table.dtbl tr.partial{background:#fff8e1}
 <div class="tab-page" id="page-equip">
   <div class="kpi-grid" id="kpi-equip"></div>
   <div class="card"><h3>Consumo por Categoría y Tienda (MWh)</h3><p class="card-desc">Consumo anual estimado por auditoría energética, desglosado en 5 categorías de equipos.</p><div class="chart-wrap"><canvas id="equip-c1"></canvas></div></div>
+  <div class="card"><h3>Top 10 Equipos por Consumo</h3><p class="card-desc">Equipos con mayor consumo anual agregado. Variantes de nombre fusionadas.</p><div class="chart-wrap tall"><canvas id="equip-c2"></canvas></div></div>
   <div class="row2">
-    <div class="card"><h3>Top 10 Equipos por Consumo</h3><p class="card-desc">Equipos con mayor consumo anual agregado. Variantes de nombre fusionadas.</p><div class="chart-wrap tall"><canvas id="equip-c2"></canvas></div></div>
     <div class="card"><h3>Eficiencia Lumínica por Tienda (lm/W)</h3><p class="card-desc">Promedio ponderado por kWh. Línea de referencia a 80 lm/W.</p><div class="chart-wrap"><canvas id="equip-c3"></canvas></div></div>
+    <div class="card"><h3>Densidad de Luminarias por Tienda (un/m²)</h3><p class="card-desc">Luminarias en operación (categoría Iluminación) por m² de tienda. m² según hoja «horarios». Línea: promedio del conjunto.</p><div class="chart-wrap"><canvas id="equip-c4"></canvas></div><p class="card-desc" id="equip-c4-note" style="margin-top:8px"></p></div>
   </div>
   <div class="card"><h3>Distribución por Tienda</h3><div class="tbl-wrap" id="equip-tbl"></div></div>
 </div>
@@ -184,6 +185,7 @@ table.dtbl tr.partial{background:#fff8e1}
   <div class="section-bar">
     <h2>Indicadores Energéticos</h2>
     <select class="year-select" id="indic-year" onchange="renderIndicCharts()"></select>
+    <select class="year-select" id="indic-mes" onchange="renderIndicCharts()" title="Mes (desde analisis-costos.xlsx)"></select>
     <select class="year-select" id="indic-tipo" onchange="renderIndicCharts()">
       <option value="Todas">Todas las tipologías</option>
       <option value="A">A – Mall</option>
@@ -192,6 +194,7 @@ table.dtbl tr.partial{background:#fff8e1}
       <option value="N/A">N/A – No retail</option>
     </select>
   </div>
+  <p class="card-desc" id="indic-note" style="margin:-8px 0 16px"></p>
   <div class="kpi-grid" id="kpi-indic"></div>
   <div class="row2">
     <div class="card"><h3 id="indic-t1">kWh/m² por Sucursal</h3><div class="chart-wrap tall"><canvas id="indic-c1"></canvas></div><div id="indic-leg1" class="indic-legend"></div></div>
@@ -268,6 +271,11 @@ async function processFiles(files){
       var wsT=wb.Sheets['tiendas']||wb.Sheets[wb.SheetNames[0]];
       var wsInd=wb.Sheets['indicadores']||wb.Sheets[wb.SheetNames[1]]||null;
       DATA.indicadores={tiendas:XLSX.utils.sheet_to_json(wsT,{defval:''}),indicadores:wsInd?XLSX.utils.sheet_to_json(wsInd,{defval:''}):[]};
+    }else if(info.key==='equipos'){
+      DATA.equipos=XLSX.utils.sheet_to_json(wb.Sheets['bbdd']||wb.Sheets[wb.SheetNames[0]],{defval:''});
+      // Store m² for luminaires/m²; optional sheet
+      var wsH=wb.Sheets['horarios'];
+      DATA.equiposHorarios=wsH?XLSX.utils.sheet_to_json(wsH,{defval:''}):[];
     }else{
       DATA[info.key]=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
     }
@@ -460,13 +468,27 @@ function computeEquip(){
     var tipo2=String(r['Equipo/Tipo2']||r['Equipo/Tipo']||'').trim();
     var lmw=parseNum(r['Eficiencia Luminarias [lm/W]']);
     totalKwh+=kwh;totalQty+=qty;storeSet[store]=true;
-    if(!byStore[store])byStore[store]={kwh:0,cats:{},lumW:0,lumKwh:0,qty:0};
+    if(!byStore[store])byStore[store]={kwh:0,cats:{},lumW:0,lumKwh:0,qty:0,lumQty:0,m2:0};
     byStore[store].kwh+=kwh;byStore[store].qty+=qty;
     byStore[store].cats[cat]=(byStore[store].cats[cat]||0)+kwh;
+    if(cat==='Iluminación')byStore[store].lumQty+=qty;
     if(cat==='Iluminación'&&lmw>0){byStore[store].lumW+=lmw*kwh;byStore[store].lumKwh+=kwh;lumWsum+=lmw*kwh;lumKwhSum+=kwh;}
     var tn=tipo2.replace(/\./g,'').replace(/\s+/g,' ');
     if(!byType[tn])byType[tn]={kwh:0,qty:0,cat:cat};byType[tn].kwh+=kwh;byType[tn].qty+=qty;
   });
+
+  // Luminaires per m²: m² from the "horarios" sheet, matched by store name
+  var m2ByStore={};
+  (DATA.equiposHorarios||[]).forEach(function(r){
+    var s=String(r['Tienda']||'').trim();var m2=parseNum(r['M2']);if(s&&m2>0)m2ByStore[s]=m2;
+  });
+  var lumQtySum=0;var lumM2Sum=0;
+  Object.keys(byStore).forEach(function(s){
+    var b=byStore[s];b.m2=m2ByStore[s]||0;
+    b.lumPerM2=b.m2>0&&b.lumQty>0?b.lumQty/b.m2:null;
+    if(b.lumPerM2!=null){lumQtySum+=b.lumQty;lumM2Sum+=b.m2;}
+  });
+  var avgLumM2=lumM2Sum>0?lumQtySum/lumM2Sum:null;
 
   var stores=Object.keys(byStore).sort(function(a,b){return byStore[b].kwh-byStore[a].kwh;});
   var avgLmW=lumKwhSum>0?Math.round(lumWsum/lumKwhSum):0;
@@ -482,7 +504,7 @@ function computeEquip(){
   var topCatPct=totalKwh>0?(catTotals[topCat]/totalKwh*100):0;
 
   return{byStore:byStore,byType:byType,totalKwh:totalKwh,totalQty:totalQty,stores:stores,avgLmW:avgLmW,
-    topTypes:topTypes,top1:top1,nStores:nStores,catTotals:catTotals,topCat:topCat,topCatPct:topCatPct};
+    topTypes:topTypes,top1:top1,nStores:nStores,catTotals:catTotals,topCat:topCat,topCatPct:topCatPct,avgLumM2:avgLumM2};
 }
 
 function equipKpiText(Q){
@@ -532,15 +554,33 @@ function renderEquip(){
       tooltip:{filter:function(it){return it.datasetIndex===0;},callbacks:{label:function(c){return' '+lmVals[c.dataIndex]+' lm/W';}}}},
       scales:{y:{min:70,ticks:{callback:function(v){return v+' lm/W';}},grid:{color:'#f0f2f5'}},x:{grid:{display:false}}}}});
 
+  // Chart 4: luminaires per m²
+  var storesM2=stores.filter(function(s){return byStore[s].lumPerM2!=null;})
+    .sort(function(a,b){return byStore[b].lumPerM2-byStore[a].lumPerM2;});
+  var lumM2Vals=storesM2.map(function(s){return Math.round(byStore[s].lumPerM2*100)/100;});
+  var lumAnn=Q.avgLumM2==null?{}:{annotations:{avg:{type:'line',scaleID:'y',value:Q.avgLumM2,borderColor:'rgba(100,100,100,0.45)',borderWidth:1.5,borderDash:[6,4],
+    label:{display:true,content:'Prom: '+fDec(Q.avgLumM2,2)+' un/m²',position:'end',backgroundColor:'rgba(60,60,60,0.7)',font:{size:10},padding:3}}}};
+  makeChart('equip-c4',{type:'bar',data:{labels:storesM2,
+    datasets:[{label:'un/m²',data:lumM2Vals,backgroundColor:CAT_BG['Iluminación'],borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},annotation:lumAnn,
+      tooltip:{callbacks:{label:function(c){var b=byStore[storesM2[c.dataIndex]];
+        return[' '+fDec(c.parsed.y,2)+' luminarias/m²',' '+fCLP(Math.round(b.lumQty))+' luminarias · '+fCLP(Math.round(b.m2))+' m²'];}}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:function(v){return fDec(v,2);}},grid:{color:'#f0f2f5'}},x:{grid:{display:false}}}}});
+  var noM2=stores.filter(function(s){return byStore[s].lumQty>0&&byStore[s].lumPerM2==null;});
+  document.getElementById('equip-c4-note').textContent=noM2.length?'Sin m² en hoja «horarios» para: '+noM2.join(', ')+'.':'';
+
   // Table
   var html='<table class="dtbl"><thead><tr><th>Tienda</th><th style="text-align:right">kWh Total</th>';
   CAT_ORDER.forEach(function(c){html+='<th style="text-align:right">'+c+' %</th>';});
-  html+='<th style="text-align:right">lm/W</th></tr></thead><tbody>';
+  html+='<th style="text-align:right">lm/W</th><th style="text-align:right">Luminarias</th><th style="text-align:right">m²</th><th style="text-align:right">Lum./m²</th></tr></thead><tbody>';
   stores.forEach(function(s){
     var d=byStore[s];var lm=d.lumKwh>0?Math.round(d.lumW/d.lumKwh):'—';
     html+='<tr><td style="font-weight:600">'+s+'</td><td style="text-align:right">'+fCLP(Math.round(d.kwh))+'</td>';
     CAT_ORDER.forEach(function(c){var p=d.kwh>0?((d.cats[c]||0)/d.kwh*100).toFixed(1):'0.0';html+='<td style="text-align:right">'+p+'%</td>';});
-    html+='<td style="text-align:right">'+lm+'</td></tr>';
+    html+='<td style="text-align:right">'+lm+'</td>';
+    html+='<td style="text-align:right">'+fCLP(Math.round(d.lumQty))+'</td>';
+    html+='<td style="text-align:right">'+(d.m2>0?fCLP(Math.round(d.m2)):'—')+'</td>';
+    html+='<td style="text-align:right">'+(d.lumPerM2!=null?fDec(d.lumPerM2,2):'—')+'</td></tr>';
   });
   html+='</tbody></table>';document.getElementById('equip-tbl').innerHTML=html;
 }
@@ -879,8 +919,54 @@ function indicYears(){
   return{years:years,defaultYear:defY.length>0?defY[defY.length-1]:years[years.length-1]};
 }
 
-function computeIndic(selY,selTipo){
-  var ind=DATA.indicadores.indicadores;
+var MES_L=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// Monthly billing per site from analisis-costos ("año|mes" → localidad → {kwh,cfv}).
+// Same sums as the annual "indicadores" sheet, which only has yearly rows.
+var COSTOS_MES=null;
+function costosMensual(){
+  if(COSTOS_MES)return COSTOS_MES;
+  var out={};
+  DATA.costos.forEach(function(r){
+    var loc=consolidarLoc(r['Localidad']);
+    var anio=Math.round(parseNum(r['Año']));if(anio<2020||anio>2030)return;
+    var mesN=MESES[String(r['Período']||'').trim().toLowerCase()]||0;if(!mesN)return;
+    var k=anio+'|'+mesN;if(!out[k])out[k]={};
+    if(!out[k][loc])out[k][loc]={kwh:0,cfv:0};
+    out[k][loc].kwh+=parseNum(r['Electricidad Consumida (Kw/h)']);
+    out[k][loc].cfv+=parseNum(r['Costo Eléctrico C/FV']);
+  });
+  COSTOS_MES=out;return out;
+}
+function indicMonths(selY){
+  var CM=costosMensual();var ms=[];
+  for(var m=1;m<=12;m++){if(CM[selY+'|'+m])ms.push(m);}
+  return ms;
+}
+function fillIndicMonths(selY){
+  var sel=document.getElementById('indic-mes');var prev=parseInt(sel.value)||0;
+  var ms=indicMonths(selY);
+  sel.innerHTML='<option value="">Año completo</option>'+ms.map(function(m){return'<option value="'+m+'">'+MES_L[m]+'</option>';}).join('');
+  sel.value=ms.indexOf(prev)>=0?String(prev):'';
+}
+// Rows shaped like the "indicadores" sheet, for one month. Grid energy only: autoconsumo
+// exists only per year. Hours = h_anual/12; tCO₂e prorated with the site's annual factor.
+function indicMonthRows(selY,selMes){
+  var bill=costosMensual()[selY+'|'+selMes]||{};
+  return DATA.indicadores.indicadores.filter(function(r){return Math.round(parseNum(r['año']||r.anio))===selY;}).map(function(r){
+    var b=bill[String(r.localidad||'').trim()];if(!b)return null;
+    var m2=parseNum(r.m2);var hMes=parseNum(r.h_anual)/12;var kwhY=parseNum(r.kwh);
+    var kpm2=m2>0?b.kwh/m2:0;var kph=hMes>0?b.kwh/hMes:0;
+    return{localidad:r.localidad,categoria:r.categoria,tipologia:r.tipologia,'año':selY,meses_datos:1,
+      kwh:b.kwh,costo_cfv_clp:b.cfv,m2:m2,h_anual:parseNum(r.h_anual),
+      kwh_por_m2:kpm2,kwh_por_hora_op:kph,clp_por_m2:m2>0?b.cfv/m2:0,
+      tco2e:kwhY>0?parseNum(r.tco2e)*b.kwh/kwhY:0,nota:'',
+      kwh_autoconsumo:0,kwh_consumo_total:b.kwh,kwh_total_por_m2:kpm2,kwh_total_por_hora_op:kph};
+  }).filter(Boolean);
+}
+
+function computeIndic(selY,selTipo,selMes){
+  var ind=selMes?indicMonthRows(selY,selMes):DATA.indicadores.indicadores;
   var lastData=ind.filter(function(r){
     if(Math.round(parseNum(r['año']||r.anio))!==selY)return false;
     if(selTipo!=='Todas'&&String(r.tipologia||'').trim()!==selTipo)return false;
@@ -897,11 +983,11 @@ function computeIndic(selY,selTipo){
   lastData.forEach(function(r){totalCo2+=parseNum(r.tco2e);});
 
   var isPartial=lastData.some(function(r){return String(r.nota||'').indexOf('Parcial')>=0;});
-  return{lastData:lastData,sucs:sucs,sucsM2:sucsM2,avgKwhM2:avgKwhM2,avgClpM2:avgClpM2,totalCo2:totalCo2,isPartial:isPartial};
+  return{lastData:lastData,sucs:sucs,sucsM2:sucsM2,avgKwhM2:avgKwhM2,avgClpM2:avgClpM2,totalCo2:totalCo2,isPartial:isPartial,month:selMes||null};
 }
 
 function indicKpiText(N,selTipo){
-  var partialNote=N.isPartial?'Datos parciales — no anualizados':'Año completo (12 meses)';
+  var partialNote=N.month?MES_L[N.month]+' · solo energía de red':N.isPartial?'Datos parciales — no anualizados':'Año completo (12 meses)';
   var tipoLabel=selTipo==='Todas'?'':' · Tipo '+selTipo;
   return{
     kwhM2:fDec(N.avgKwhM2,1),kwhM2Detail:N.sucsM2.length+' sucursales con m² · '+partialNote,
@@ -913,7 +999,13 @@ function indicKpiText(N,selTipo){
 function renderIndicCharts(){
   var selY=parseInt(document.getElementById('indic-year').value);
   var selTipo=document.getElementById('indic-tipo').value;
-  var N=computeIndic(selY,selTipo);var K=indicKpiText(N,selTipo);
+  fillIndicMonths(selY);
+  var selMes=parseInt(document.getElementById('indic-mes').value)||0;
+  var N=computeIndic(selY,selTipo,selMes);var K=indicKpiText(N,selTipo);
+  var per=selMes?MES_L[selMes]+' '+selY:String(selY);
+  var kwhLbl=selMes?'kWh Red':'kWh Total';
+  document.getElementById('indic-note').textContent=selMes?
+    'Vista mensual calculada desde analisis-costos.xlsx: solo energía de red (el autoconsumo solar solo existe por año). kWh/h usa las horas anuales ÷ 12; tCO₂e con el factor de emisión del año.':'';
   var lastData=N.lastData,sucs=N.sucs,sucsM2=N.sucsM2;
 
   document.getElementById('kpi-indic').innerHTML=
@@ -922,10 +1014,10 @@ function renderIndicCharts(){
     kpiHTML('CLP/m² Prom.',K.clpM2,K.clpM2Detail);
 
   // Update chart titles with year
-  document.getElementById('indic-t1').textContent='kWh Total/m² por Sucursal — '+selY;
-  document.getElementById('indic-t2').textContent='kWh Total/hora de operación — '+selY;
-  document.getElementById('indic-t3').textContent='CLP/m² por Sucursal — '+selY;
-  document.getElementById('indic-t4').textContent='tCO₂e por Localidad — '+selY;
+  document.getElementById('indic-t1').textContent=kwhLbl+'/m² por Sucursal — '+per;
+  document.getElementById('indic-t2').textContent=kwhLbl+'/hora de operación — '+per;
+  document.getElementById('indic-t3').textContent='CLP/m² por Sucursal — '+per;
+  document.getElementById('indic-t4').textContent='tCO₂e por Localidad — '+per;
 
   var tipoColors={'A':'#2980b9','B':'#16a34a','C':'#f59e0b','N/A':'#8b5cf6'};
   var tipoLabels={'A':'A – Mall','B':'B – Calle corrido','C':'C – Calle con colación','N/A':'N/A – No retail'};
@@ -985,7 +1077,7 @@ function renderIndicCharts(){
   renderLegend('indic-leg4',co2data);
 
   // Update table with same filters
-  var tblTitle='Tabla de Indicadores — '+selY+(selTipo!=='Todas'?' · Tipo '+selTipo:'');
+  var tblTitle='Tabla de Indicadores — '+per+(selTipo!=='Todas'?' · Tipo '+selTipo:'');
   document.getElementById('indic-tbl-title').textContent=tblTitle;
   renderIndicTable(lastData);
 }
