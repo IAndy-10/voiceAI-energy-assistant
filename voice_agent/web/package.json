@@ -1,0 +1,11 @@
+{
+  "name": "vesta-pipecat-web-client",
+  "private": true,
+  "version": "0.4.2",
+  "scripts": {"build": "esbuild src/main.js --bundle --format=esm --target=es2022 --outfile=dist/vesta-voice-client.js"},
+  "dependencies": {
+    "@pipecat-ai/client-js": "^1.10.0",
+    "@pipecat-ai/small-webrtc-transport": "^1.10.0"
+  },
+  "devDependencies": {"esbuild": "^0.25.0"}
+}

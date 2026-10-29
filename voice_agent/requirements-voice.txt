@@ -1,0 +1,4 @@
+# Isolated runtime for the future browser voice agent. Do not add to energy-api.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pipecat-ai[webrtc,openai,runner]==1.14.0

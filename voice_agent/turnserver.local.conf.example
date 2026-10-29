@@ -1,0 +1,18 @@
+# Copy to turnserver.local.conf through scripts/create_turn_local_config.ps1.
+# The generated file contains the local TURN shared secret and is ignored by Git.
+listening-port=3478
+listening-ip=0.0.0.0
+relay-ip=0.0.0.0
+external-ip=host.docker.internal
+min-port=49160
+max-port=49169
+realm=vesta.local
+use-auth-secret
+static-auth-secret=REPLACE_WITH_PRIVATE_SECRET
+fingerprint
+no-tls
+no-dtls
+no-cli
+no-multicast-peers
+log-file=stdout
+simple-log

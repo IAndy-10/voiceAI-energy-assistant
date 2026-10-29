@@ -4,11 +4,27 @@ data/
 
 # Snapshots exported from the dashboard contain the same client figures
 agent_snapshot*.json
+m02_verification*.json
 
 # Secrets
 .env
 .env.*
+voice_agent/turnserver.local.conf
 
 # OS / Office lock files
 .DS_Store
 ~$*
+
+/Datos/
+/data/
+*.xlsx
+*.xls
+!.env.example
+
+# Python
+.venv/
+/voice_agent/.venv/
+/voice_agent/web/node_modules/
+__pycache__/
+.pytest_cache/
+*.pyc
