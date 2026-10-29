@@ -42,10 +42,11 @@ class VoiceSettings:
         return cls(
             enabled=os.getenv("VOICE_ENABLED", "true").strip().lower() == "true",
             provider=provider,  # type: ignore[arg-type]
-            pipecat_url=os.getenv("VOICE_PIPECAT_URL", "http://127.0.0.1:7861").rstrip("/"),
+            pipecat_url=os.getenv("VOICE_PIPECAT_URL", "http://127.0.0.1:7860").rstrip("/"),
             max_session_seconds=_positive_int("VOICE_MAX_SESSION_SECONDS", 60),
             max_recording_seconds=_positive_int("VOICE_MAX_RECORDING_SECONDS", 30),
-            pipeline_enabled=os.getenv("VOICE_PIPELINE_ENABLED", "false").strip().lower() == "true",
+            # Same rule as voice_agent: follow the AI assistant's OpenAI switch unless overridden.
+            pipeline_enabled=(os.getenv("VOICE_PIPELINE_ENABLED") or os.getenv("OPENAI_ENABLED", "false")).strip().lower() == "true",
         )
 
     def public(self) -> dict[str, object]:

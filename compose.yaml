@@ -31,8 +31,9 @@ services:
       SNAPSHOT_MAX_BYTES: ${SNAPSHOT_MAX_BYTES:-5242880}
       VOICE_ENABLED: ${VOICE_ENABLED:-true}
       VOICE_PROVIDER: ${VOICE_PROVIDER:-pipecat}
-      VOICE_PIPECAT_URL: ${VOICE_PIPECAT_URL:-http://127.0.0.1:7861}
-      VOICE_MAX_SESSION_SECONDS: ${VOICE_MAX_SESSION_SECONDS:-60}
+      VOICE_PIPECAT_URL: ${VOICE_PIPECAT_URL:-http://127.0.0.1:7860}
+      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-${OPENAI_ENABLED:-false}}
+      VOICE_MAX_SESSION_SECONDS: ${VOICE_SESSION_MAX_SECONDS:-300}
       VOICE_MAX_RECORDING_SECONDS: ${VOICE_MAX_RECORDING_SECONDS:-30}
     ports:
       - "127.0.0.1:8000:8000"
@@ -40,26 +41,48 @@ services:
     volumes:
       - agent-usage:/var/lib/vesta-agent
 
+  # Docker Desktop on macOS cannot route browser media to a container address,
+  # so the browser relays through this TURN server (see docs/plan.md, Parte 2).
+  # Only port 3478 is published; the relay ports stay on the Compose network,
+  # where the bot reaches them directly.
+  turn-local:
+    image: coturn/coturn:4.6.3-r3-alpine
+    profiles: ["voice"]
+    command: ["-n", "--listening-port=3478", "--min-port=49160", "--max-port=49169", "--realm=vesta.local",
+              "--use-auth-secret", "--static-auth-secret=${TURN_SHARED_SECRET:-}", "--fingerprint",
+              "--no-tls", "--no-dtls", "--no-cli", "--no-multicast-peers", "--log-file=stdout", "--simple-log"]
+    ports:
+      - "127.0.0.1:3478:3478/udp"
+      - "127.0.0.1:3478:3478/tcp"
+    restart: unless-stopped
+
   voice-agent:
     image: vesta-pipecat-voice-agent:0.4.2
     build:
       context: .
       dockerfile: voice_agent/Dockerfile
     profiles: ["voice"]
-    command: ["python", "-m", "voice_agent.webrtc_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860", "--allowed-origins", "http://127.0.0.1:8000"]
+    command: ["python", "-m", "voice_agent.webrtc_turn_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860",
+              "--allowed-origins", "http://127.0.0.1:8000", "http://localhost:8000"]
     environment:
       VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}
       VOICE_ENERGY_API_BASE_URL: http://energy-api:8000
       VOICE_ENERGY_API_TOKEN: ${ENERGY_TOOLS_API_TOKEN:?Set ENERGY_TOOLS_API_TOKEN in your shell or .env file}
+      # Same key and switch as the AI assistant tab; VOICE_PIPELINE_ENABLED overrides the switch.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-${OPENAI_ENABLED:-false}}
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}
+      # aiortc uses the first host (Compose network); the browser uses 127.0.0.1.
+      PIPECAT_TURN_HOST: turn-local,127.0.0.1
+      VOICE_TURN_TTL_SECONDS: ${VOICE_TURN_TTL_SECONDS:-86400}
       VOICE_SESSION_MAX_SECONDS: ${VOICE_SESSION_MAX_SECONDS:-300}
       VOICE_IDLE_TIMEOUT_SECONDS: ${VOICE_IDLE_TIMEOUT_SECONDS:-45}
-      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}
       VOICE_STT_MODEL: ${VOICE_STT_MODEL:-gpt-transcribe}
       VOICE_LLM_MODEL: ${VOICE_LLM_MODEL:-${OPENAI_MODEL:-gpt-6-luna}}
+      VOICE_LLM_MAX_TOKENS: ${VOICE_LLM_MAX_TOKENS:-300}
       VOICE_TTS_MODEL: ${VOICE_TTS_MODEL:-gpt-4o-mini-tts}
       VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-alloy}
-      VOICE_MAX_TURNS: ${VOICE_MAX_TURNS:-3}
+      VOICE_MAX_TURNS: ${VOICE_MAX_TURNS:-8}
       VOICE_TOOL_TIMEOUT_SECONDS: ${VOICE_TOOL_TIMEOUT_SECONDS:-10}
       VOICE_SESSION_BUDGET_USD: ${VOICE_SESSION_BUDGET_USD:-0.20}
       VOICE_BUDGET_USD: ${VOICE_BUDGET_USD:-2.00}
@@ -67,6 +90,7 @@ services:
       VOICE_USAGE_FILE: /var/lib/vesta-voice/usage.json
     depends_on:
       - energy-api
+      - turn-local
     ports:
       - "127.0.0.1:7860:7860"
     volumes:
