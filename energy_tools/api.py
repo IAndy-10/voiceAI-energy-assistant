@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import ValidationError
 
 from .agent import AgentProviderError, AgentUnavailable, VestaAgent
@@ -18,6 +18,7 @@ from .agent_usage import BudgetExceeded
 from .local_agent import LocalChatUnavailable, LocalEnergyAssistant
 from .snapshot import SnapshotRepository
 from .tools import EnergyTools
+from .voice import VoiceSettings
 
 
 repository = SnapshotRepository()
@@ -117,6 +118,21 @@ def data_info() -> dict[str, Any]:
 @app.get("/agent/status", dependencies=[Depends(require_data_token)])
 def agent_status() -> dict[str, Any]:
     return agent.status()
+
+
+@app.get("/voice/config")
+def voice_config() -> dict[str, Any]:
+    """Public, non-secret voice UI configuration selected by the backend."""
+    return VoiceSettings.from_env().public()
+
+
+@app.get("/voice/client.js")
+def voice_client_bundle() -> FileResponse:
+    """Serve the already-built official Pipecat client bundle without credentials."""
+    bundle = Path(__file__).parent.parent / "voice_agent" / "web" / "dist" / "vesta-voice-client.js"
+    if not bundle.is_file():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Voice client is not built")
+    return FileResponse(bundle, media_type="text/javascript", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/agent/chat", dependencies=[Depends(require_data_token)])

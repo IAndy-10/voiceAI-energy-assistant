@@ -1,0 +1,13 @@
+# Opt-in diagnostic configuration for SmallWebRTC on Docker Desktop.
+# It is intentionally separate from compose.yaml so the normal voice profile
+# remains unchanged while ICE media connectivity is being verified.
+services:
+  voice-agent-webrtc-local:
+    image: vesta-pipecat-voice-agent:0.4.2
+    profiles: ["webrtc-local"]
+    command: ["python", "-m", "voice_agent.webrtc_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7861", "--allowed-origins", "http://127.0.0.1:7861"]
+    sysctls:
+      net.ipv4.ip_local_port_range: "40000 40100"
+    ports:
+      - "127.0.0.1:7861:7861/tcp"
+      - "127.0.0.1:40000-40100:40000-40100/udp"

@@ -29,11 +29,49 @@ services:
       OPENAI_USAGE_FILE: /var/lib/vesta-agent/usage.json
       VESTA_DEMO_SNAPSHOT_SHA256: ${VESTA_DEMO_SNAPSHOT_SHA256:-4fb95b36721ba61d7f8221b2b686b9a8ea731267078025059eba78433aa06882}
       SNAPSHOT_MAX_BYTES: ${SNAPSHOT_MAX_BYTES:-5242880}
+      VOICE_ENABLED: ${VOICE_ENABLED:-true}
+      VOICE_PROVIDER: ${VOICE_PROVIDER:-pipecat}
+      VOICE_PIPECAT_URL: ${VOICE_PIPECAT_URL:-http://127.0.0.1:7861}
+      VOICE_MAX_SESSION_SECONDS: ${VOICE_MAX_SESSION_SECONDS:-60}
+      VOICE_MAX_RECORDING_SECONDS: ${VOICE_MAX_RECORDING_SECONDS:-30}
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
     volumes:
       - agent-usage:/var/lib/vesta-agent
 
+  voice-agent:
+    image: vesta-pipecat-voice-agent:0.4.2
+    build:
+      context: .
+      dockerfile: voice_agent/Dockerfile
+    profiles: ["voice"]
+    command: ["python", "-m", "voice_agent.webrtc_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860", "--allowed-origins", "http://127.0.0.1:8000"]
+    environment:
+      VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}
+      VOICE_ENERGY_API_BASE_URL: http://energy-api:8000
+      VOICE_ENERGY_API_TOKEN: ${ENERGY_TOOLS_API_TOKEN:?Set ENERGY_TOOLS_API_TOKEN in your shell or .env file}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VOICE_SESSION_MAX_SECONDS: ${VOICE_SESSION_MAX_SECONDS:-300}
+      VOICE_IDLE_TIMEOUT_SECONDS: ${VOICE_IDLE_TIMEOUT_SECONDS:-45}
+      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}
+      VOICE_STT_MODEL: ${VOICE_STT_MODEL:-gpt-transcribe}
+      VOICE_LLM_MODEL: ${VOICE_LLM_MODEL:-${OPENAI_MODEL:-gpt-6-luna}}
+      VOICE_TTS_MODEL: ${VOICE_TTS_MODEL:-gpt-4o-mini-tts}
+      VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-alloy}
+      VOICE_MAX_TURNS: ${VOICE_MAX_TURNS:-3}
+      VOICE_TOOL_TIMEOUT_SECONDS: ${VOICE_TOOL_TIMEOUT_SECONDS:-10}
+      VOICE_SESSION_BUDGET_USD: ${VOICE_SESSION_BUDGET_USD:-0.20}
+      VOICE_BUDGET_USD: ${VOICE_BUDGET_USD:-2.00}
+      VOICE_MAX_SESSIONS: ${VOICE_MAX_SESSIONS:-10}
+      VOICE_USAGE_FILE: /var/lib/vesta-voice/usage.json
+    depends_on:
+      - energy-api
+    ports:
+      - "127.0.0.1:7860:7860"
+    volumes:
+      - voice-usage:/var/lib/vesta-voice
+
 volumes:
   agent-usage:
+  voice-usage:

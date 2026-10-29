@@ -83,6 +83,55 @@ def test_demo_contains_no_embedded_client_figures():
     assert "min-height:0" in response.text
 
 
+def test_demo_exposes_voice_tab_without_credentials_or_direct_provider_controls():
+    client = TestClient(api.app)
+    response = client.get("/demo")
+    assert response.status_code == 200
+    assert "Asistente de voz" in response.text
+    assert 'data-tab="voice"' in response.text
+    assert 'id="voice-connect"' in response.text
+    assert "startBotAndConnect" in response.text
+    assert "/voice/config" in response.text
+    assert "OPENAI_API_KEY" not in response.text
+
+
+def test_voice_configuration_is_backend_selected_and_safe(monkeypatch):
+    monkeypatch.setenv("VOICE_ENABLED", "true")
+    monkeypatch.setenv("VOICE_PROVIDER", "pipecat")
+    monkeypatch.setenv("VOICE_PIPECAT_URL", "http://127.0.0.1:7861")
+    monkeypatch.setenv("VOICE_MAX_SESSION_SECONDS", "60")
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
+    client = TestClient(api.app)
+    payload = client.get("/voice/config").json()
+    assert payload["provider"] == "pipecat"
+    assert payload["capabilities"] == {
+        "connect": True,
+        "transcription": False,
+        "assistant_audio": False,
+        "openai_direct": False,
+    }
+    assert "key" not in " ".join(payload).lower()
+
+
+def test_voice_configuration_declares_openai_direct_as_not_implemented(monkeypatch):
+    monkeypatch.setenv("VOICE_ENABLED", "true")
+    monkeypatch.setenv("VOICE_PROVIDER", "openai_direct")
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
+    client = TestClient(api.app)
+    payload = client.get("/voice/config").json()
+    assert payload["provider"] == "openai_direct"
+    assert payload["pipecat_url"] is None
+    assert not any(payload["capabilities"].values())
+
+
+def test_voice_client_bundle_is_available_without_exposing_environment():
+    client = TestClient(api.app)
+    response = client.get("/voice/client.js")
+    assert response.status_code == 200
+    assert "createVestaVoiceClient" in response.text
+    assert "OPENAI_API_KEY" not in response.text
+
+
 def test_openapi_docs_are_available_without_client_data():
     client = TestClient(api.app)
     assert client.get("/docs").status_code == 200

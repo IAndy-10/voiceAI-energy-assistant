@@ -9,9 +9,12 @@ m02_verification*.json
 # Secrets and local environments
 .env
 .env.*
+voice_agent/turnserver.local.conf
 !.env.example
 .git/
 .venv/
+voice_agent/.venv/
+voice_agent/web/node_modules/
 __pycache__/
 **/__pycache__/
 .pytest_cache/
