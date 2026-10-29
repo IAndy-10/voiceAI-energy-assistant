@@ -16,3 +16,14 @@ def test_voice_limits_are_positive_and_do_not_expose_private_stt_tts_settings(mo
     assert payload["max_recording_seconds"] == 30
     assert "stt_provider" not in payload
     assert "tts_provider" not in payload
+
+
+def test_voice_pipeline_follows_the_openai_switch_unless_overridden(monkeypatch):
+    monkeypatch.delenv("VOICE_PIPELINE_ENABLED", raising=False)
+    monkeypatch.setenv("OPENAI_ENABLED", "true")
+    assert VoiceSettings.from_env().public()["pipeline_enabled"] is True
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
+    assert VoiceSettings.from_env().public()["pipeline_enabled"] is False
+    monkeypatch.delenv("VOICE_PIPELINE_ENABLED")
+    monkeypatch.delenv("OPENAI_ENABLED")
+    assert VoiceSettings.from_env().public()["pipeline_enabled"] is False

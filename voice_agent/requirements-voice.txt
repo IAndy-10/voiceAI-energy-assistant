@@ -1,4 +1,6 @@
-# Isolated runtime for the future browser voice agent. Do not add to energy-api.
+# Isolated runtime for the browser voice agent. Do not add to energy-api.
+# STT, LLM and TTS all use OpenAI with the same key as the AI assistant tab;
+# silero runs voice-activity detection locally.
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30,<1.0
-pipecat-ai[webrtc,openai,runner]==1.14.0
+pipecat-ai[webrtc,silero,openai,runner]==1.14.0
