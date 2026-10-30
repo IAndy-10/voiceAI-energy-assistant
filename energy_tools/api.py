@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .agent import AgentProviderError, AgentUnavailable, VestaAgent
 from .agent_models import AgentChatRequest
@@ -19,12 +19,14 @@ from .local_agent import LocalChatUnavailable, LocalEnergyAssistant
 from .snapshot import SnapshotRepository
 from .tools import EnergyTools
 from .voice import VoiceSettings
+from .voice_sessions import VoiceSessionAuthority
 
 
 repository = SnapshotRepository()
 tools = EnergyTools(repository)
 agent = VestaAgent(repository)
 local_agent = LocalEnergyAssistant(repository)
+voice_sessions = VoiceSessionAuthority()
 app = FastAPI(title="Vesta Energy Tools", version="0.1.0", docs_url="/docs", redoc_url=None)
 
 
@@ -124,6 +126,51 @@ def agent_status() -> dict[str, Any]:
 def voice_config() -> dict[str, Any]:
     """Public, non-secret voice UI configuration selected by the backend."""
     return VoiceSettings.from_env().public()
+
+
+class VoiceSessionRequest(BaseModel):
+    mode: str
+
+
+class VoiceSessionValidation(BaseModel):
+    session_token: str
+    mode: str
+
+
+@app.post("/voice/sessions", dependencies=[Depends(require_data_token)])
+def issue_voice_session(request: VoiceSessionRequest) -> dict[str, Any]:
+    if request.mode not in {"minimal", "ai"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Modo de voz inválido")
+    settings = VoiceSettings.from_env()
+    if not (settings.enabled and settings.provider == "pipecat"):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="El transporte de voz no está disponible")
+    #if request.mode == "ai":
+    #    snapshot = repository.metadata()
+    #    if snapshot is None or snapshot.get("mode") != "demo":
+    #        raise HTTPException(
+    #            status_code=status.HTTP_403_FORBIDDEN,
+    #            detail="La IA de voz requiere un snapshot DEMO verificado.",
+    #        )
+    if request.mode == "ai":
+        snapshot = repository.metadata()
+        if snapshot is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Debes cargar un snapshot válido antes de utilizar la IA de voz.",
+            )
+    try:
+        grant = voice_sessions.issue(request.mode, ai_allowed=settings.pipeline_enabled)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    return {"session_token": grant.token, "mode": grant.mode, "expires_at": grant.expires_at}
+
+
+@app.post("/voice/sessions/validate", dependencies=[Depends(require_data_token)])
+def validate_voice_session(request: VoiceSessionValidation) -> dict[str, str]:
+    mode = voice_sessions.consume(request.session_token, request.mode)
+    if mode is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autorización de voz inválida o vencida")
+    return {"mode": mode}
 
 
 @app.get("/voice/client.js")

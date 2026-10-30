@@ -16436,8 +16436,37 @@ var $f424abce94945317$var$botParticipant = (pc_id) => ({
 });
 
 // src/main.js
+function botAudioPlayer() {
+  const audio = new Audio();
+  audio.autoplay = true;
+  return {
+    play(track2) {
+      audio.srcObject = new MediaStream([track2]);
+      audio.play().catch(() => {
+      });
+    },
+    stop() {
+      audio.srcObject = null;
+    }
+  };
+}
 function createVestaVoiceClient(callbacks = {}) {
-  return new $364c127d152b1085$export$8f7f86a77535f7a3({ transport: new $f424abce94945317$export$62043589d053a879(), enableMic: true, callbacks });
+  const player = botAudioPlayer();
+  return new $364c127d152b1085$export$8f7f86a77535f7a3({
+    transport: new $f424abce94945317$export$62043589d053a879(),
+    enableMic: true,
+    callbacks: {
+      ...callbacks,
+      onTrackStarted: (track2, participant) => {
+        if (track2.kind === "audio" && !participant?.local) player.play(track2);
+        callbacks.onTrackStarted?.(track2, participant);
+      },
+      onDisconnected: () => {
+        player.stop();
+        callbacks.onDisconnected?.();
+      }
+    }
+  });
 }
 export {
   createVestaVoiceClient

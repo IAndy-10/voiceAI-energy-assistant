@@ -1,0 +1,7 @@
+# Local development override: Chrome reaches the native Windows runner, while
+# energy-api reaches the same host through Docker Desktop's host gateway.
+services:
+  energy-api:
+    environment:
+      VOICE_PIPECAT_URL: http://127.0.0.1:7861
+      VOICE_RUNNER_HEALTH_URL: http://host.docker.internal:7861

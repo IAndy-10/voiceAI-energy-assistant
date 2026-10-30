@@ -106,11 +106,46 @@ def test_voice_configuration_is_backend_selected_and_safe(monkeypatch):
     assert payload["provider"] == "pipecat"
     assert payload["capabilities"] == {
         "connect": True,
+        "voice_ai_allowed": False,
         "transcription": False,
         "assistant_audio": False,
         "openai_direct": False,
     }
     assert "key" not in " ".join(payload).lower()
+
+
+def test_voice_session_grants_are_authenticated_one_use_and_respect_global_voice_permission(monkeypatch):
+    monkeypatch.setenv("ENERGY_TOOLS_API_TOKEN", "test-token")
+    monkeypatch.setenv("VOICE_ENABLED", "true")
+    monkeypatch.setenv("VOICE_PROVIDER", "pipecat")
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
+    client = TestClient(api.app); headers = {"Authorization": "Bearer test-token"}
+    assert client.post("/voice/sessions", json={"mode": "minimal"}).status_code == 401
+    assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
+    issued = client.post("/voice/sessions", json={"mode": "minimal"}, headers=headers)
+    assert issued.status_code == 200
+    grant = issued.json()
+    validated = client.post("/voice/sessions/validate", json={"session_token": grant["session_token"], "mode": "minimal"}, headers=headers)
+    assert validated.json() == {"mode": "minimal"}
+    assert client.post("/voice/sessions/validate", json={"session_token": grant["session_token"], "mode": "minimal"}, headers=headers).status_code == 401
+
+
+def test_voice_session_ai_grant_requires_the_server_ceiling_and_verified_demo(monkeypatch, valid_snapshot):
+    monkeypatch.setenv("ENERGY_TOOLS_API_TOKEN", "test-token")
+    monkeypatch.setenv("VOICE_ENABLED", "true")
+    monkeypatch.setenv("VOICE_PROVIDER", "pipecat")
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "true")
+    approved = _synthetic(valid_snapshot)
+    monkeypatch.setenv("VESTA_DEMO_SNAPSHOT_SHA256", SnapshotRepository.canonical_digest(approved))
+    api.repository._snapshot = None
+    client = TestClient(api.app); headers = {"Authorization": "Bearer test-token"}
+    assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
+    assert client.post("/snapshot", json=valid_snapshot, headers=headers).status_code == 200
+    assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
+    assert client.post("/snapshot", json=approved, headers=headers).status_code == 200
+    response = client.post("/voice/sessions", json={"mode": "ai"}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["mode"] == "ai"
 
 
 def test_voice_configuration_declares_openai_direct_as_not_implemented(monkeypatch):

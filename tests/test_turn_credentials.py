@@ -22,6 +22,13 @@ def test_turn_credentials_are_time_bounded_and_rest_hmac_compatible():
     ).decode("ascii")
 
 
+def test_turn_credentials_list_each_peer_host_with_the_bot_host_first():
+    result = build_turn_ice_server("local-secret", "turn-local, 127.0.0.1", ttl_seconds=600, now=1_000)
+
+    assert result["urls"] == ["turn:turn-local:3478?transport=udp", "turn:127.0.0.1:3478?transport=udp"]
+    assert result["username"] == "1600:vesta-local"
+
+
 def test_turn_runner_reexports_bot_for_pipecat_main_module_discovery():
     """Regression: ``python -m voice_agent.webrtc_turn_runner`` must expose bot."""
     assert turn_runner_bot is minimal_pipeline_bot
@@ -37,7 +44,7 @@ def test_turn_runner_reexports_bot_for_pipecat_main_module_discovery():
             sys.modules["__main__"] = previous
 
 
-@pytest.mark.parametrize("secret,host,ttl", [("", "host", 1), ("secret", "", 1), ("secret", "host", 0)])
+@pytest.mark.parametrize("secret,host,ttl", [("", "host", 1), ("secret", "", 1), ("secret", " , ", 1), ("secret", "host", 0)])
 def test_turn_credentials_require_complete_bounded_configuration(secret, host, ttl):
     with pytest.raises(ValueError):
         build_turn_ice_server(secret, host, ttl_seconds=ttl)

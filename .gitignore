@@ -9,6 +9,7 @@ m02_verification*.json
 # Secrets
 .env
 .env.*
+!.env.windows.example
 voice_agent/turnserver.local.conf
 
 # OS / Office lock files
