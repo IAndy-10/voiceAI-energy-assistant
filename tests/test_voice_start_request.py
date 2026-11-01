@@ -4,10 +4,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_demo_sends_the_pipecat_request_data_property_not_an_ignored_body_property():
+def test_demo_wraps_the_grant_in_pipecat_start_body():
     demo = (ROOT / "energy_tools" / "demo.html").read_text(encoding="utf-8")
 
-    assert "requestData:{voice_session_token:grant.session_token,mode:grant.mode}" in demo
+    assert "requestData:{body:{voice_session_token:grant.session_token,mode:grant.mode}}" in demo
     assert "startBotAndConnect({endpoint:voiceConfig.pipecat_url+'/start',body:" not in demo
 
 

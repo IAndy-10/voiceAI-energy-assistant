@@ -49,6 +49,7 @@ services:
   # where the bot reaches them directly.
   turn-local:
     image: coturn/coturn:4.6.3-r3-alpine
+    profiles: ["voice"]
     command: ["-n", "--listening-port=3478", "--min-port=49160", "--max-port=49169", "--realm=vesta.local",
               "--use-auth-secret", "--static-auth-secret=${TURN_SHARED_SECRET:-}", "--fingerprint",
               "--no-tls", "--no-dtls", "--no-cli", "--no-multicast-peers", "--log-file=stdout", "--simple-log"]
@@ -62,6 +63,7 @@ services:
     build:
       context: .
       dockerfile: voice_agent/Dockerfile
+    profiles: ["voice"]
     command: ["python", "-m", "voice_agent.webrtc_turn_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860",
               "--allowed-origins", "http://127.0.0.1:8000", "http://localhost:8000"]
     environment:

@@ -14,10 +14,10 @@ def test_voice_runtime_is_isolated_and_pinned():
     assert "python -m voice_agent.smoke_test" in dockerfile
 
 
-def test_voice_service_starts_with_the_default_stack_and_healthcheck_is_not_an_ice_claim():
+def test_voice_service_is_opt_in_and_healthcheck_is_not_an_ice_claim():
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     assert "voice-agent:" in compose
-    assert 'profiles: ["voice"]' not in compose
+    assert compose.count('profiles: ["voice"]') == 2
     assert "restart: unless-stopped" in compose
     assert "healthcheck:" in compose
     assert "does not prove ICE/media" in compose
