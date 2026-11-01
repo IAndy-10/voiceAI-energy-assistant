@@ -42,6 +42,7 @@ Componentes principales:
 | M04.4 | Implementado y cubierto por pruebas | Pipeline opcional STT → LLM → Tools → TTS, allowlist y presupuesto persistente. |
 | M04.5 | Preparado para validación manual | Procedimiento controlado para una primera conversación. No se declara completado hasta obtener evidencia real extremo a extremo. |
 | M04.6 | Implementado y cubierto por pruebas | Runner Pipecat persistente, autorización efímera por sesión y controles de IA textual/voz independientes. |
+| M04.7 | Cerrado con decisión de plataforma | Windows usa Pipecat nativo; macOS conserva el flujo Docker de Ítalo; Linux + Docker queda pendiente de una validación WebRTC real. |
 
 ## Requisitos
 
@@ -86,9 +87,15 @@ VOICE_PIPELINE_ENABLED=false
 `.env` es la fuente única para el token de Energy Tools, permisos globales, modelos, presupuestos y `OPENAI_API_KEY`. Cree `.env` desde `.env.example`. Si necesita cambiar solo la ruta de red de Windows, copie `.env.windows.example` a `.env.windows.local`; ese archivo admite únicamente la URL local de FastAPI, host, puerto y orígenes del runner, y está ignorado por Git.
 
 ```powershell
-docker compose -f compose.yaml -f compose.windows-voice.yaml up -d
+docker compose -f compose.yaml -f compose.windows-voice.yaml up -d --build dashboard energy-api
 .\scripts\start-voice-windows.ps1
 ```
+
+Ese comando inicia únicamente dashboard y API en Docker. En Windows no inicie
+`voice-agent` ni `turn-local`: el navegador llega al runner nativo en
+`127.0.0.1:7861` y la API llega al mismo proceso mediante
+`host.docker.internal:7861`. Si el runner no está iniciado, el chat escrito
+sigue disponible y la UI informa que la voz no está disponible.
 
 El lanzador mapea `ENERGY_TOOLS_API_TOKEN` a `VOICE_ENERGY_API_TOKEN` solo en el proceso hijo de Pipecat: no duplique el valor en `.env`. Con `VOICE_PIPELINE_ENABLED=false` inicia transporte mínimo sin requerir una clave OpenAI. Con valor `true`, exige la clave antes de arrancar, pero no realiza una llamada OpenAI ni inicia una sesión por sí mismo. Para revisar la configuración efectiva sin arrancar el runner ni revelar secretos use `./scripts/start-voice-windows.ps1 -CheckOnly`.
 
@@ -100,16 +107,18 @@ docker compose up -d --build --force-recreate --no-deps energy-api
 
 Esto vacía el snapshot en memoria, por lo que debe volver a cargar el JSON DEMO después del reinicio. El procedimiento completo de conversación controlada está en [M04.5](docs/M04.5-FIRST-VOICE-TEST.md).
 
-### Servicio de voz Docker
+### Servicio de voz Docker y plataformas
 
-`voice-agent` y `turn-local` forman parte del arranque habitual y usan `restart: unless-stopped`. Inicie o detenga todo el stack así:
+La ruta Docker de `voice-agent` y `turn-local` se conserva sin cambios para
+macOS, donde Ítalo realizará su validación. Sus contenedores usan
+`restart: unless-stopped`:
 
 ```powershell
 docker compose up -d --build
 docker compose down
 ```
 
-El healthcheck del runner comprueba que su HTTP responda; **no** confirma que ICE/WebRTC ni el audio estén conectados. Para usar el runner Windows validado sin editar Compose, aplique `compose.windows-voice.yaml`: expone `127.0.0.1:7861` al navegador y usa `host.docker.internal:7861` desde `energy-api`. La conectividad ICE/TURN de Docker Desktop sigue siendo una limitación conocida.
+El healthcheck del runner comprueba que su HTTP responda; **no** confirma que ICE/WebRTC ni el audio estén conectados. Docker Desktop Windows no es una ruta soportada para media WebRTC: los candidatos bridge del contenedor no son alcanzables desde Chrome y publicar HTTP no publica UDP WebRTC. Linux + Docker Compose es candidato de producción, pero requiere una validación ICE/audio real antes de declararlo soportado.
 
 ### Permisos y activación por sesión
 
@@ -164,7 +173,8 @@ Las pruebas usan dobles/mocks para OpenAI y no consumen tokens. La conversación
 ## Limitaciones conocidas
 
 - SmallWebRTC/Pipecat funciona con el runner local de Windows; la conexión desde la cuarta pestaña fue validada manualmente.
-- Docker Desktop presenta dificultades de ICE/TURN para WebRTC. Un `HTTP 200` de señalización no equivale a audio conectado.
+- Docker Desktop Windows no ofrece una ruta WebRTC directa validada; use el runner nativo. Un `HTTP 200` de señalización no equivale a audio conectado.
+- macOS conserva el flujo Docker de Ítalo para validación independiente. Linux + Docker Compose sigue pendiente de una prueba ICE y audio real.
 - La conversación completa con proveedores reales todavía está pendiente de validación extremo a extremo.
 - `VOICE_PIPELINE_ENABLED=false` es el valor inicial y no realiza llamadas externas.
 - Que el runner figure disponible o devuelva `HTTP 200` no prueba una conexión ICE; Docker Desktop sigue pendiente de validación manual desde Chrome.
@@ -186,4 +196,5 @@ Resumen sugerido para revisión: validar el contrato de snapshot y las seis Ener
 - [Arquitectura de voz M04.3](docs/M04.3-VOICE-ARCHITECTURE.md)
 - [Pipeline Energy Tools M04.4](docs/M04.4-PIPECAT-ENERGY-PIPELINE.md)
 - [Primera conversación controlada M04.5](docs/M04.5-FIRST-VOICE-TEST.md)
+- [Diagnóstico y decisión Windows M04.7](docs/M04.7-WEBRTC-WINDOWS-DIAGNOSIS.md)
 - [Especificación original de demostración](docs/multicentro_energy_manager_demo_spec.md)
