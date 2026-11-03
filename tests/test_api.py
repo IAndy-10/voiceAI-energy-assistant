@@ -130,7 +130,7 @@ def test_voice_session_grants_are_authenticated_one_use_and_respect_global_voice
     assert client.post("/voice/sessions/validate", json={"session_token": grant["session_token"], "mode": "minimal"}, headers=headers).status_code == 401
 
 
-def test_voice_session_ai_grant_requires_the_server_ceiling_and_verified_demo(monkeypatch, valid_snapshot):
+def test_voice_session_ai_grant_requires_the_server_ceiling_and_a_loaded_snapshot(monkeypatch, valid_snapshot):
     monkeypatch.setenv("ENERGY_TOOLS_API_TOKEN", "test-token")
     monkeypatch.setenv("VOICE_ENABLED", "true")
     monkeypatch.setenv("VOICE_PROVIDER", "pipecat")
@@ -140,12 +140,17 @@ def test_voice_session_ai_grant_requires_the_server_ceiling_and_verified_demo(mo
     api.repository._snapshot = None
     client = TestClient(api.app); headers = {"Authorization": "Bearer test-token"}
     assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
-    assert client.post("/snapshot", json=valid_snapshot, headers=headers).status_code == 200
-    assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
-    assert client.post("/snapshot", json=approved, headers=headers).status_code == 200
+    # A real (unverified) snapshot is enough, as for the text assistant.
+    loaded = client.post("/snapshot", json=valid_snapshot, headers=headers)
+    assert loaded.status_code == 200 and loaded.json()["mode"] == "unverified"
     response = client.post("/voice/sessions", json={"mode": "ai"}, headers=headers)
-    assert response.status_code == 200
-    assert response.json()["mode"] == "ai"
+    assert response.status_code == 200 and response.json()["mode"] == "ai"
+    assert client.post("/snapshot", json=approved, headers=headers).json()["mode"] == "demo"
+    assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 200
+    # A snapshot with the wrong format is rejected on upload.
+    assert client.post("/snapshot", json={"schema_version": "9.9"}, headers=headers).status_code == 422
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
+    assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
 
 
 def test_voice_configuration_declares_openai_direct_as_not_implemented(monkeypatch):

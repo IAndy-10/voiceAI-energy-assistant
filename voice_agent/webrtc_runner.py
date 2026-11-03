@@ -14,6 +14,7 @@ from pipecat.frames.frames import LLMRunFrame
 from pipecat.frames.frames import OutputTransportMessageUrgentFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker, ProcessorUnusablePolicy
+from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
 from pipecat.runner.types import RunnerArguments
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
@@ -37,6 +38,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
     reserved = False
     settled = False
     context = None
+    # Fixed Spanish text from VoiceBudgetExceeded; never contains secrets or user data.
+    unavailable_reason: str | None = None
 
     def settle_budget() -> None:
         nonlocal settled
@@ -61,15 +64,18 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
             context = create_context()
             pipeline = build_pipeline(transport, session, settings, context=context)
             logger.info(f"voice_pipeline_started stt={settings.stt_model} llm={settings.llm_model} tts={settings.tts_model}")
-        except VoiceBudgetExceeded:
+        except VoiceBudgetExceeded as exc:
             logger.warning("voice_pipeline_not_started reason=budget_or_configuration")
+            unavailable_reason = str(exc)
             pipeline = Pipeline([transport.input(), transport.output()])
     else:
         if authorized_mode != "minimal":
             logger.warning("voice_pipeline_not_started reason=missing_or_invalid_session_grant")
         pipeline = Pipeline([transport.input(), transport.output()])
 
+    rtvi = RTVIProcessor()
     worker = PipelineWorker(pipeline, params=PipelineParams(enable_metrics=True, enable_usage_metrics=True),
+                            rtvi_processor=rtvi,
                             processor_unusable_policy=ProcessorUnusablePolicy.END,
                             idle_timeout_secs=settings.idle_timeout_seconds)
     runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
@@ -92,6 +98,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
         if context is not None:
             context.add_message({"role": "user", "content": GREETING})
             await worker.queue_frames([LLMRunFrame()])
+
+    @rtvi.event_handler("on_client_ready")
+    async def on_client_ready(_rtvi):
+        # Tell the browser why nobody will answer instead of leaving a silent session.
+        if unavailable_reason is not None:
+            await worker.queue_frames([RTVIServerMessageFrame(data={
+                "type": "voice_unavailable", "message": unavailable_reason})])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(_transport, _client):

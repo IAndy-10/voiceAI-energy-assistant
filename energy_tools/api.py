@@ -144,13 +144,13 @@ def issue_voice_session(request: VoiceSessionRequest) -> dict[str, Any]:
     settings = VoiceSettings.from_env()
     if not (settings.enabled and settings.provider == "pipecat"):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="El transporte de voz no está disponible")
-    if request.mode == "ai":
-        snapshot = repository.metadata()
-        if snapshot is None or snapshot.get("mode") != "demo":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="La IA de voz requiere un snapshot DEMO verificado.",
-            )
+    # Same rule as the text assistant: any snapshot that passed schema validation
+    # on POST /snapshot may be used; the DEMO label only affects how it is shown.
+    if request.mode == "ai" and repository.metadata() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cargue un snapshot antes de usar la IA de voz.",
+        )
     try:
         grant = voice_sessions.issue(request.mode, ai_allowed=settings.pipeline_enabled)
     except PermissionError as exc:
