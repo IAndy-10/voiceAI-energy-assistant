@@ -53,6 +53,22 @@ def test_all_tool_endpoints_are_authenticated_and_connected(monkeypatch, valid_s
     assert all(response.status_code == 200 and response.json()["status"] == "ok" for response in responses)
 
 
+def test_new_tool_endpoints_are_authenticated_and_validate_the_month(monkeypatch, valid_snapshot):
+    monkeypatch.setenv("ENERGY_TOOLS_API_TOKEN", "test-token")
+    api.repository._snapshot = None
+    client = TestClient(api.app); headers = {"Authorization": "Bearer test-token"}
+    assert client.get("/energy/equipment").status_code == 401
+    assert client.get("/energy/indicators", params={"year": 2025}).status_code == 401
+    assert client.post("/snapshot", json=valid_snapshot, headers=headers).status_code == 200
+    # The fixture has neither monthly data nor the equipment/indicator files: safe not_found results.
+    assert client.get("/energy/overview", params={"year": 2025, "month": 7}, headers=headers).json()["status"] == "not_found"
+    assert client.get("/energy/equipment", headers=headers).json()["status"] == "not_found"
+    assert client.get("/energy/indicators", params={"year": 2025}, headers=headers).json()["status"] == "not_found"
+    for bad_month in (0, 13):
+        assert client.get("/energy/overview", params={"year": 2025, "month": bad_month}, headers=headers).status_code == 422
+    assert "get_equipment" in client.get("/tools").json()["tools"]
+
+
 def test_demo_contains_no_embedded_client_figures():
     client = TestClient(api.app)
     response = client.get("/demo")

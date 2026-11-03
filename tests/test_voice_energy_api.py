@@ -64,7 +64,7 @@ def test_adapter_handles_connection_and_missing_token_without_logging_payloads()
     assert no_token.get_store("Centro Demo", 2025)["status"] == "configuration_error"
 
 
-def test_adapter_builds_all_six_real_contract_routes():
+def test_adapter_builds_all_eight_real_contract_routes():
     urls = []
 
     def opener(request, timeout):
@@ -73,17 +73,27 @@ def test_adapter_builds_all_six_real_contract_routes():
 
     adapter = VoiceEnergyAdapter(settings(), opener=opener)
     adapter.get_overview(2025)
+    adapter.get_overview(2025, 7)
     adapter.get_store("Centro Demo", 2025)
     adapter.rank_stores("cost", "asc", 3)
     adapter.get_solar("Planta Demo")
     adapter.get_chiller(2025)
+    adapter.get_equipment()
+    adapter.get_equipment("Parral")
+    adapter.get_indicators(2025)
+    adapter.get_indicators(2025, "Linares")
     adapter.get_data_info()
 
     assert urls == [
         "http://energy-api:8000/energy/overview?year=2025",
+        "http://energy-api:8000/energy/overview?year=2025&month=7",
         "http://energy-api:8000/energy/stores/Centro%20Demo?year=2025",
         "http://energy-api:8000/energy/stores/ranking?metric=cost&order=asc&top_n=3",
         "http://energy-api:8000/energy/solar?plant=Planta+Demo",
         "http://energy-api:8000/energy/chiller?year=2025",
+        "http://energy-api:8000/energy/equipment",
+        "http://energy-api:8000/energy/equipment?store=Parral",
+        "http://energy-api:8000/energy/indicators?year=2025",
+        "http://energy-api:8000/energy/indicators?year=2025&site=Linares",
         "http://energy-api:8000/energy/data-info",
     ]

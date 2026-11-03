@@ -360,8 +360,8 @@ function processCostos(){
     if(!byLocYear[ky])byLocYear[ky]={loc:loc,anio:anio,kwh:0,sfv:0,desc:0,cfv:0};
     byLocYear[ky].kwh+=kwh;byLocYear[ky].sfv+=sfv;byLocYear[ky].desc+=desc;byLocYear[ky].cfv+=cfv;
     var km=anio+'|'+mesN;
-    if(!byYearMonth[km])byYearMonth[km]={anio:anio,mes:mesN,kwh:0,cfv:0};
-    byYearMonth[km].kwh+=kwh;byYearMonth[km].cfv+=cfv;
+    if(!byYearMonth[km])byYearMonth[km]={anio:anio,mes:mesN,kwh:0,sfv:0,desc:0,cfv:0};
+    byYearMonth[km].kwh+=kwh;byYearMonth[km].sfv+=sfv;byYearMonth[km].desc+=desc;byYearMonth[km].cfv+=cfv;
   });
   var yearMonthCount={};
   Object.keys(byYearMonth).forEach(function(k){var a=parseInt(k.split('|')[0]);yearMonthCount[a]=(yearMonthCount[a]||0)+1;});
@@ -1108,8 +1108,13 @@ function snapshotExec(E){
   var years={};
   Object.keys(E.totals).forEach(function(y){
     var t=E.totals[y];
+    // Monthly chain totals, the same sums the monthly chart and the indicators month view use.
+    var byMonth=(monthsByYear[y]||[]).map(function(m){var b=E.d.byYearMonth[y+'|'+m];
+      return{month:m,month_name:MES_S[m],kwh:Math.round(b.kwh),kwh_display:fMWh(b.kwh,1),
+        cost_sfv:money(b.sfv),gd_discount:money(b.desc),cost_cfv:money(b.cfv)};});
     years[y]={complete:E.cy.indexOf(+y)>=0,months:monthsByYear[y]||[],kwh:Math.round(t.kwh),
-      cost_sfv:money(t.sfv),gd_discount:money(t.desc),cost_cfv:money(t.cfv),kwh_display:fMWh(t.kwh)};
+      cost_sfv:money(t.sfv),gd_discount:money(t.desc),cost_cfv:money(t.cfv),kwh_display:fMWh(t.kwh),
+      by_month:byMonth};
   });
 
   var stores=E.ranking.map(function(r,i){

@@ -52,6 +52,16 @@ class Periods(ContractModel):
         return self
 
 
+class MonthTotals(ContractModel):
+    month: int = Field(ge=1, le=12)
+    month_name: str | None = None
+    kwh: int | float
+    kwh_display: str | None = None
+    cost_sfv: Money
+    gd_discount: Money
+    cost_cfv: Money
+
+
 class YearTotals(ContractModel):
     complete: bool
     months: list[int]
@@ -60,6 +70,8 @@ class YearTotals(ContractModel):
     gd_discount: Money
     cost_cfv: Money
     kwh_display: str | None = None
+    # Optional so snapshots exported before the monthly breakdown still load.
+    by_month: list[MonthTotals] = Field(default_factory=list)
 
 
 class ExecData(ContractModel):

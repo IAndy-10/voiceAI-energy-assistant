@@ -115,6 +115,14 @@ def _year(value: Any, *, allow_none: bool = False) -> int | None:
     return value
 
 
+def _month(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 12:
+        raise ValueError("month debe ser un entero entre 1 y 12, o null.")
+    return value
+
+
 def _text(value: Any, field: str, *, allow_none: bool = False) -> str | None:
     if value is None and allow_none:
         return None
@@ -124,17 +132,18 @@ def _text(value: Any, field: str, *, allow_none: bool = False) -> str | None:
 
 
 def validate_tool_arguments(name: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    """Validate the six public contracts without importing or duplicating tools."""
+    """Validate the eight public contracts without importing or duplicating tools."""
     if not isinstance(arguments, Mapping):
         raise ValueError("Los argumentos de herramienta deben ser un objeto.")
     expected = {
-        "get_overview": {"year"}, "get_store": {"name", "year"},
+        "get_overview": {"year", "month"}, "get_store": {"name", "year"},
         "rank_stores": {"metric", "order", "top_n"}, "get_solar": {"plant"},
-        "get_chiller": {"year"}, "get_data_info": set(),
+        "get_chiller": {"year"}, "get_equipment": {"store"}, "get_indicators": {"year", "site"},
+        "get_data_info": set(),
     }
     if name not in expected or set(arguments) != expected[name]:
         raise ValueError("Los argumentos de la herramienta no son compatibles.")
-    if name == "get_overview": return {"year": _year(arguments["year"])}
+    if name == "get_overview": return {"year": _year(arguments["year"]), "month": _month(arguments["month"])}
     if name == "get_store": return {"name": _text(arguments["name"], "name"), "year": _year(arguments["year"])}
     if name == "rank_stores":
         if arguments["metric"] not in {"cost", "kwh", "increase_abs", "increase_pct"} or arguments["order"] not in {"asc", "desc"}:
@@ -144,16 +153,21 @@ def validate_tool_arguments(name: str, arguments: Mapping[str, Any]) -> dict[str
         return dict(arguments)
     if name == "get_solar": return {"plant": _text(arguments["plant"], "plant", allow_none=True)}
     if name == "get_chiller": return {"year": _year(arguments["year"], allow_none=True)}
+    if name == "get_equipment": return {"store": _text(arguments["store"], "store", allow_none=True)}
+    if name == "get_indicators":
+        return {"year": _year(arguments["year"]), "site": _text(arguments["site"], "site", allow_none=True)}
     return {}
 
 
 def energy_tool_schemas() -> ToolsSchema:
     specs = [
-        ("get_overview", "Resumen energético para un año.", {"year": {"type": "integer", "minimum": 2000, "maximum": 2100}}, ["year"]),
+        ("get_overview", "Costo y consumo de la cadena: total anual, o de un mes si month es 1-12.", {"year": {"type": "integer", "minimum": 2000, "maximum": 2100}, "month": {"type": ["integer", "null"], "minimum": 1, "maximum": 12}}, ["year", "month"]),
         ("get_store", "Datos de una sucursal y año.", {"name": {"type": "string"}, "year": {"type": "integer", "minimum": 2000, "maximum": 2100}}, ["name", "year"]),
         ("rank_stores", "Ranking precomputado de sucursales.", {"metric": {"type": "string", "enum": ["cost", "kwh", "increase_abs", "increase_pct"]}, "order": {"type": "string", "enum": ["asc", "desc"]}, "top_n": {"type": "integer", "minimum": 1, "maximum": 20}}, ["metric", "order", "top_n"]),
         ("get_solar", "Datos solares globales o de una planta.", {"plant": {"type": ["string", "null"]}}, ["plant"]),
         ("get_chiller", "Costos de chiller por año o globales.", {"year": {"type": ["integer", "null"], "minimum": 2000, "maximum": 2100}}, ["year"]),
+        ("get_equipment", "Auditoría de equipos (consumo estimado, categorías, top equipos, lm/W), global o de una tienda.", {"store": {"type": ["string", "null"]}}, ["store"]),
+        ("get_indicators", "Indicadores por localidad de un año: kWh/m², kWh/hora, CLP/m², tCO₂e; global o de una localidad.", {"year": {"type": "integer", "minimum": 2000, "maximum": 2100}, "site": {"type": ["string", "null"]}}, ["year", "site"]),
         ("get_data_info", "Fuentes, período y brechas del snapshot activo.", {}, []),
     ]
     return ToolsSchema([FunctionSchema(name, description, properties, required) for name, description, properties, required in specs])

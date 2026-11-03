@@ -70,21 +70,31 @@ def voice_settings() -> VoicePipelineSettings:
     return VoicePipelineSettings(True, "not-a-real-key", "gpt-transcribe", "gpt-6-luna", "gpt-4o-mini-tts", "alloy", 3, 2, 45, 0.2, 2, 10, "ignored.json")
 
 
-def test_pipeline_registers_exactly_the_six_authorized_tools_without_provider_requests():
+def test_pipeline_registers_exactly_the_eight_authorized_tools_without_provider_requests():
     transport, llm = StubTransport(), StubLLM()
     pipeline = build_pipeline(transport, VoiceSession(StubAdapter(), 3), voice_settings(), VoiceServices(StubProcessor(), llm, StubProcessor()))
     assert pipeline is not None
     assert [name for name, _, _ in llm.registrations] == [
-        "get_overview", "get_store", "rank_stores", "get_solar", "get_chiller", "get_data_info",
+        "get_overview", "get_store", "rank_stores", "get_solar", "get_chiller",
+        "get_equipment", "get_indicators", "get_data_info",
     ]
     assert all(item[2]["timeout_secs"] == 2 for item in llm.registrations)
 
 
 def test_tool_schemas_and_argument_validation_follow_public_energy_contracts():
     assert [schema.name for schema in energy_tool_schemas().standard_tools] == [
-        "get_overview", "get_store", "rank_stores", "get_solar", "get_chiller", "get_data_info",
+        "get_overview", "get_store", "rank_stores", "get_solar", "get_chiller",
+        "get_equipment", "get_indicators", "get_data_info",
     ]
-    assert validate_tool_arguments("get_overview", {"year": 2025}) == {"year": 2025}
+    assert validate_tool_arguments("get_overview", {"year": 2025, "month": None}) == {"year": 2025, "month": None}
+    assert validate_tool_arguments("get_overview", {"year": 2025, "month": 7}) == {"year": 2025, "month": 7}
+    assert validate_tool_arguments("get_equipment", {"store": " Parral "}) == {"store": "Parral"}
+    assert validate_tool_arguments("get_indicators", {"year": 2025, "site": None}) == {"year": 2025, "site": None}
+    for bad_month in (0, 13, "7", True):
+        with pytest.raises(ValueError):
+            validate_tool_arguments("get_overview", {"year": 2025, "month": bad_month})
+    with pytest.raises(ValueError):
+        validate_tool_arguments("get_overview", {"year": 2025})
     assert validate_tool_arguments("rank_stores", {"metric": "cost", "order": "asc", "top_n": 3})["order"] == "asc"
     with pytest.raises(ValueError):
         validate_tool_arguments("get_store", {"name": "Centro"})
@@ -95,11 +105,11 @@ def test_tool_schemas_and_argument_validation_follow_public_energy_contracts():
 def test_tool_handler_uses_adapter_and_returns_safe_invalid_argument_result():
     adapter = StubAdapter()
     session = VoiceSession(adapter, 2)
-    call = StubCall("get_overview", {"year": 2025})
+    call = StubCall("get_overview", {"year": 2025, "month": None})
     asyncio.run(session.handle_tool_call(call))
-    assert adapter.calls == [("get_overview", {"year": 2025})]
+    assert adapter.calls == [("get_overview", {"year": 2025, "month": None})]
     assert call.results[0]["status"] == "ok"
-    invalid = StubCall("get_overview", {"year": "not-a-year"})
+    invalid = StubCall("get_overview", {"year": "not-a-year", "month": None})
     asyncio.run(session.handle_tool_call(invalid))
     assert invalid.results == [{"status": "invalid_request", "warnings": ["Argumentos de herramienta inválidos."]}]
 

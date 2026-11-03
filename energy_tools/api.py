@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ValidationError
 
@@ -60,7 +60,8 @@ def health() -> dict[str, Any]:
 
 @app.get("/tools")
 def list_tools() -> dict[str, Any]:
-    return {"tools": ["get_overview", "get_store", "rank_stores", "get_solar", "get_chiller", "get_data_info"]}
+    return {"tools": ["get_overview", "get_store", "rank_stores", "get_solar", "get_chiller",
+                      "get_equipment", "get_indicators", "get_data_info"]}
 
 
 @app.post("/snapshot", dependencies=[Depends(require_data_token)])
@@ -88,8 +89,8 @@ def snapshot_status() -> dict[str, Any]:
 
 
 @app.get("/energy/overview", dependencies=[Depends(require_data_token)])
-def overview(year: int) -> dict[str, Any]:
-    return tools.get_overview(year)
+def overview(year: int, month: int | None = Query(default=None, ge=1, le=12)) -> dict[str, Any]:
+    return tools.get_overview(year, month)
 
 
 @app.get("/energy/stores/ranking", dependencies=[Depends(require_data_token)])
@@ -110,6 +111,16 @@ def solar(plant: str | None = None) -> dict[str, Any]:
 @app.get("/energy/chiller", dependencies=[Depends(require_data_token)])
 def chiller(year: int | None = None) -> dict[str, Any]:
     return tools.get_chiller(year)
+
+
+@app.get("/energy/equipment", dependencies=[Depends(require_data_token)])
+def equipment(store: str | None = None) -> dict[str, Any]:
+    return tools.get_equipment(store)
+
+
+@app.get("/energy/indicators", dependencies=[Depends(require_data_token)])
+def indicators(year: int, site: str | None = None) -> dict[str, Any]:
+    return tools.get_indicators(year, site)
 
 
 @app.get("/energy/data-info", dependencies=[Depends(require_data_token)])
