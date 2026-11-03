@@ -69,6 +69,28 @@ table.dtbl tr.partial{background:#fff8e1}
 .year-select{padding:6px 12px;border:1px solid #ccc;border-radius:8px;font-size:.88rem;font-weight:600;color:#1a3a5c;background:#fff;margin-left:12px}
 .section-bar{display:flex;align-items:center;margin-bottom:20px;gap:12px}
 .section-bar h2{color:#1a3a5c;font-size:1.1rem}
+/* Asistente: panel lateral, solo cuando la API sirve el dashboard (/app) */
+#assist-panel{position:fixed;top:0;right:0;width:min(400px,100vw);height:100vh;background:#fff;box-shadow:-4px 0 18px rgba(0,0,0,.12);display:flex;flex-direction:column;transform:translateX(100%);visibility:hidden;transition:transform .2s,visibility .2s;z-index:1000}
+#assist-panel.open{transform:none;visibility:visible}
+.assist-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb}
+.assist-head h2{color:#1a3a5c;font-size:1.05rem}
+.assist-close{border:none;background:none;font-size:1.4rem;cursor:pointer;color:#555;line-height:1}
+.assist-status{padding:8px 16px;font-size:.78rem;border-bottom:1px solid #f0f2f5}
+.assist-status.ok{color:#15803d}.assist-status.error{color:#b91c1c}.assist-status.idle{color:#555}
+#assist-auth{padding:12px 16px;display:flex;gap:8px;border-bottom:1px solid #f0f2f5}
+#assist-auth input,#assist-q{flex:1;min-width:0;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-size:.88rem}
+#assist-log{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;background:#f8fafc}
+.assist-empty{color:#888;font-size:.85rem;text-align:center;margin-top:24px;line-height:1.5}
+.assist-msg{max-width:88%;padding:8px 12px;border-radius:12px;font-size:.88rem;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
+.assist-msg.user{align-self:flex-end;background:#2980b9;color:#fff;border-bottom-right-radius:4px}
+.assist-msg.bot{align-self:flex-start;background:#fff;border:1px solid #e5e7eb;color:#333;border-bottom-left-radius:4px}
+.assist-msg.err{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+.assist-meta{font-size:.72rem;color:#6b7280;margin-top:4px}.assist-meta:empty{display:none}
+.assist-warn{font-size:.74rem;color:#92400e;margin-top:6px}
+.assist-warn summary{cursor:pointer;color:#6b7280}
+.assist-warn ul{margin:4px 0 0 16px;color:#4b5563}
+.assist-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid #e5e7eb;align-items:center}
+.assist-foot select{padding:7px;border:1px solid #ccc;border-radius:8px;font-size:.8rem;background:#fff}
 </style>
 </head>
 <body>
@@ -110,6 +132,7 @@ table.dtbl tr.partial{background:#fff8e1}
     <span id="sync-status"></span>
     <button class="hdr-btn" onclick="downloadSnapshot()" title="Descarga agent_snapshot.json con los datos de este dashboard">⬇ Descargar snapshot</button>
     <button class="hdr-btn primary" onclick="syncSnapshot(event)" title="Envía los datos al asistente de voz · Shift+clic para cambiar servidor o clave">⟳ Sincronizar asistente</button>
+    <button class="hdr-btn primary" id="btn-assist" style="display:none" onclick="toggleAssistant()" title="Preguntar sobre los datos cargados">💬 Asistente</button>
     <button id="btn-reload" onclick="location.reload()">↻ Recargar archivos</button>
   </div>
 </div>
@@ -204,6 +227,21 @@ table.dtbl tr.partial{background:#fff8e1}
   <div class="card"><h3 id="indic-tbl-title">Tabla de Indicadores</h3><div class="tbl-wrap" id="indic-tbl"></div></div>
 </div>
 </div>
+
+<aside id="assist-panel" aria-label="Asistente energético">
+  <div class="assist-head"><h2>💬 Asistente Vesta</h2><button class="assist-close" onclick="toggleAssistant(false)" title="Cerrar">×</button></div>
+  <div id="assist-status" class="assist-status idle">Desconectado</div>
+  <form id="assist-auth" onsubmit="saveAssistToken(event)" style="display:none">
+    <input id="assist-token" type="password" placeholder="Token de la API" autocomplete="off">
+    <button class="hdr-btn primary" type="submit">Conectar</button>
+  </form>
+  <div id="assist-log"><div class="assist-empty">Pregunte por costos, consumo, sucursales, solar o chiller.<br>Las cifras salen de los datos cargados en este dashboard.</div></div>
+  <form class="assist-foot" onsubmit="askAssistant(event)">
+    <select id="assist-mode" title="Motor de respuesta" onchange="assist.modeTouched=true"><option value="local">Local</option><option value="openai" disabled>OpenAI</option></select>
+    <input id="assist-q" placeholder="Escriba su pregunta…" maxlength="2000" disabled autocomplete="off">
+    <button id="assist-send" class="hdr-btn primary" type="submit" disabled>Enviar</button>
+  </form>
+</aside>
 
 <script>
 /* ══════════════ UTILITIES ══════════════ */
@@ -1323,6 +1361,143 @@ async function syncSnapshot(ev){
 function setSyncStatus(kind,text){
   var el=document.getElementById('sync-status');el.className='sync-'+kind;el.textContent=text;
 }
+/* ══════════════ ASISTENTE (/app) ══════════════ */
+// When energy_tools serves this page (/app), the panel syncs buildSnapshot() to the same
+// origin and chats over /agent/*. The dashboard stays the only place figures are computed.
+// The API token lives in sessionStorage: this tab only, cleared when it closes.
+var ASSIST_TOKEN_KEY='mc_api_token';
+var assist={synced:false,openai:false,busy:false,modeTouched:false};
+function assistToken(){try{return sessionStorage.getItem(ASSIST_TOKEN_KEY);}catch(e){return null;}}
+function setAssistToken(t){
+  try{if(t)sessionStorage.setItem(ASSIST_TOKEN_KEY,t);else sessionStorage.removeItem(ASSIST_TOKEN_KEY);}
+  catch(e){console.warn('[Asistente] sessionStorage unavailable',e);}
+}
+function assistHeaders(json){var h={'Authorization':'Bearer '+assistToken()};if(json)h['Content-Type']='application/json';return h;}
+function assistErr(d,fallback){var x=d&&d.detail;return typeof x==='string'?x:(x&&x.message)||fallback;}
+function assistStatus(kind,text){var el=document.getElementById('assist-status');el.className='assist-status '+kind;el.textContent=text;}
+
+async function detectAssistant(){
+  if(location.protocol==='file:')return;
+  try{
+    var r=await fetch('/health',{cache:'no-store'});if(!r.ok)return;
+    var d=await r.json();if(!d||d.status!=='ok'||!('snapshot_loaded' in d))return;
+  }catch(e){return;}
+  document.getElementById('btn-assist').style.display='';
+}
+function toggleAssistant(force){
+  var p=document.getElementById('assist-panel');
+  var open=force!=null?force:!p.classList.contains('open');
+  p.classList.toggle('open',open);
+  if(!open)return;
+  if(!assistToken())showAssistToken('');
+  else if(!assist.synced)syncAssistant();
+  else document.getElementById('assist-q').focus();
+}
+function showAssistToken(msg){
+  assist.synced=false;
+  document.getElementById('assist-auth').style.display='';
+  document.getElementById('assist-token').focus();
+  assistStatus(msg?'error':'idle',msg||'Ingrese el token de la API para conectar.');
+  updateAssistControls();
+}
+function saveAssistToken(ev){
+  ev.preventDefault();
+  var input=document.getElementById('assist-token');var t=input.value.trim();if(!t)return;
+  setAssistToken(t);input.value='';syncAssistant();
+}
+
+async function syncAssistant(){
+  assist.synced=false;updateAssistControls();
+  assistStatus('idle','Sincronizando datos…');
+  try{
+    var snap=buildSnapshot();
+    var r=await fetch('/snapshot',{method:'POST',headers:assistHeaders(true),body:JSON.stringify(snap)});
+    if(r.status===401){setAssistToken(null);showAssistToken('Token rechazado. Ingréselo de nuevo.');return false;}
+    if(!r.ok){var d=await r.json().catch(function(){return null;});throw new Error(assistErr(d,'HTTP '+r.status));}
+    document.getElementById('assist-auth').style.display='none';
+    var st=await fetch('/agent/status',{headers:assistHeaders()}).then(function(x){return x.ok?x.json():null;}).catch(function(){return null;});
+    assist.openai=!!(st&&st.status==='available');
+    if(assist.openai&&!assist.modeTouched)document.getElementById('assist-mode').value='openai';
+    assist.synced=true;
+    var y=snap.periods.years;
+    assistStatus('ok','Datos sincronizados · '+snap.generated_local.time+' · '+snap.sources.length+' archivos · '+y[0]+'–'+y[y.length-1]);
+    updateAssistControls();document.getElementById('assist-q').focus();
+    return true;
+  }catch(e){
+    console.error('[Asistente] sync failed',e);
+    assistStatus('error','No se pudo sincronizar: '+e.message);updateAssistControls();
+    return false;
+  }
+}
+
+async function askAssistant(ev){
+  ev.preventDefault();
+  var input=document.getElementById('assist-q');var q=input.value.trim();
+  if(!q||assist.busy||!assist.synced)return;
+  input.value='';assist.busy=true;updateAssistControls();
+  addAssistMsg('user',q);var reply=addAssistMsg('bot','Consultando…');
+  var mode=document.getElementById('assist-mode').value;
+  try{
+    // The API keeps the snapshot in memory only; resend it if the API restarted.
+    var h=await fetch('/health',{cache:'no-store'}).then(function(x){return x.json();});
+    if(!h.snapshot_loaded&&!(await syncAssistant()))throw new Error('no hay datos sincronizados.');
+    var r=await fetch(mode==='openai'?'/agent/chat':'/agent/local-chat',
+      {method:'POST',headers:assistHeaders(true),body:JSON.stringify({question:q})});
+    var d=await r.json().catch(function(){return null;});
+    if(r.status===401){setAssistToken(null);showAssistToken('Token rechazado. Ingréselo de nuevo.');}
+    if(!r.ok)throw new Error(assistErr(d,'HTTP '+r.status));
+    setAssistText(reply.text,d.answer||'Sin respuesta.');
+    // Only real years are periods; tools also report labels such as "snapshot".
+    var periods=[];(d.periods||[]).map(String).forEach(function(p){if(/\d{4}/.test(p)&&periods.indexOf(p)<0)periods.push(p);});
+    reply.meta.textContent=[mode==='openai'?'OpenAI':'Local'].concat(periods.length?['Períodos: '+periods.join(', ')]:[]).join(' · ');
+    addAssistWarnings(reply.el,d.warnings||[],periods);
+  }catch(e){
+    reply.el.classList.add('err');reply.text.textContent='No se pudo responder: '+e.message;
+  }finally{
+    assist.busy=false;updateAssistControls();if(assist.synced)input.focus();
+    var log=document.getElementById('assist-log');log.scrollTop=log.scrollHeight;
+  }
+}
+// Renders **bold** from the answer as <strong> without parsing HTML; other markdown marks are dropped.
+function setAssistText(el,text){
+  el.textContent='';
+  String(text).replace(/^#{1,6}\s+/gm,'').split(/\*\*([^*]+)\*\*/).forEach(function(part,i){
+    if(!part)return;
+    if(i%2){var b=document.createElement('strong');b.textContent=part;el.appendChild(b);}
+    else el.appendChild(document.createTextNode(part.replace(/\*/g,'')));
+  });
+}
+// The partial-year warning for a year the answer is about stays visible; the rest fold away.
+function addAssistWarnings(el,warnings,periods){
+  var seen=[];warnings.forEach(function(w){w=String(w);if(w&&seen.indexOf(w)<0)seen.push(w);});
+  if(!seen.length)return;
+  var key=seen.filter(function(w){return /parcial/i.test(w)&&periods.some(function(y){return w.indexOf(y)>=0;});});
+  var rest=seen.filter(function(w){return key.indexOf(w)<0;});
+  key.forEach(function(w){var k=document.createElement('div');k.className='assist-warn';k.textContent='⚠ '+w;el.appendChild(k);});
+  if(!rest.length)return;
+  var box=document.createElement('details');box.className='assist-warn';
+  var sum=document.createElement('summary');sum.textContent=rest.length===1?'1 advertencia':rest.length+' advertencias';
+  var ul=document.createElement('ul');
+  rest.forEach(function(w){var li=document.createElement('li');li.textContent=w;ul.appendChild(li);});
+  box.appendChild(sum);box.appendChild(ul);el.appendChild(box);
+}
+function addAssistMsg(role,text){
+  var log=document.getElementById('assist-log');
+  var empty=log.querySelector('.assist-empty');if(empty)empty.remove();
+  var el=document.createElement('div');el.className='assist-msg '+role;
+  var t=document.createElement('div');t.textContent=text;
+  var m=document.createElement('div');m.className='assist-meta';
+  el.appendChild(t);el.appendChild(m);log.appendChild(el);log.scrollTop=log.scrollHeight;
+  return{el:el,text:t,meta:m};
+}
+function updateAssistControls(){
+  document.getElementById('assist-q').disabled=!assist.synced;
+  document.getElementById('assist-send').disabled=!assist.synced||assist.busy;
+  var sel=document.getElementById('assist-mode');
+  sel.querySelector('option[value="openai"]').disabled=!assist.openai;
+  if(!assist.openai&&sel.value==='openai')sel.value='local';
+}
+detectAssistant();
 </script>
 </body>
 </html>

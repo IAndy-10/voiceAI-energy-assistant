@@ -203,6 +203,15 @@ def local_chat(request: AgentChatRequest) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
 
+@app.get("/app", response_class=HTMLResponse)
+def dashboard_app() -> HTMLResponse:
+    """The dashboard served from the API origin, so it can sync its snapshot and chat directly."""
+    page = Path(__file__).parent.parent / "dashboard" / "dashboard.html"
+    if not page.is_file():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Dashboard is not available")
+    return HTMLResponse(content=page.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/demo", response_class=HTMLResponse)
 def demo() -> HTMLResponse:
     """A local-only query launcher. Figures are fetched after the user supplies a token."""

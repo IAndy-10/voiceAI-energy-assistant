@@ -153,6 +153,14 @@ def test_voice_session_ai_grant_requires_the_server_ceiling_and_a_loaded_snapsho
     assert client.post("/voice/sessions", json={"mode": "ai"}, headers=headers).status_code == 403
 
 
+def test_app_serves_the_dashboard_with_the_assistant_panel():
+    response = TestClient(api.app).get("/app")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "function buildSnapshot()" in response.text
+    assert 'id="assist-panel"' in response.text
+
+
 def test_voice_configuration_declares_openai_direct_as_not_implemented(monkeypatch):
     monkeypatch.setenv("VOICE_ENABLED", "true")
     monkeypatch.setenv("VOICE_PROVIDER", "openai_direct")

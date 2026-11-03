@@ -25,6 +25,7 @@ def test_dockerfile_has_isolated_dashboard_and_api_targets():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "FROM nginx:1.27-alpine AS dashboard" in dockerfile
     assert "COPY dashboard/dashboard.html" in dockerfile
+    assert "COPY dashboard/dashboard.html ./dashboard/dashboard.html" in dockerfile
     assert "FROM python:3.11-slim AS energy-api" in dockerfile
     assert "requirements-runtime.txt" in dockerfile
     assert "COPY energy_tools ./energy_tools" in dockerfile
