@@ -58,13 +58,15 @@ class EnergyTools:
             ]
         return []
 
-    def get_overview(self, year: int) -> dict[str, Any]:
+    def get_overview(self, year: int, month: int | None = None) -> dict[str, Any]:
         snapshot = self._snapshot()
         if snapshot is None:
             return self._unavailable()
         totals = snapshot.exec.years.get(year)
         if totals is None:
             return self._result("not_found", None, year, None, self._sources(snapshot), ["No hay resumen para el año solicitado."])
+        if month is not None:
+            return self._month_overview(snapshot, year, month)
         data = totals.model_dump(mode="json")
         official_price = snapshot.official_price_clp_kwh.get(str(year))
         if official_price is not None:
@@ -77,6 +79,20 @@ class EnergyTools:
             data["change"] = snapshot.exec.change
             data["solar_discount_accumulated"] = snapshot.exec.solar_discount_accumulated
         return self._result("ok", data, year, "CLP y kWh", self._sources(snapshot), self._period_warning(snapshot, year))
+
+    def _month_overview(self, snapshot: EnergySnapshot, year: int, month: int) -> dict[str, Any]:
+        totals = snapshot.exec.years[year]
+        period = f"{year}-{month:02d}"
+        if not totals.by_month:
+            return self._result("not_found", None, period, None, self._sources(snapshot),
+                                ["Este snapshot no trae el desglose mensual; vuelva a sincronizar desde el dashboard."])
+        for item in totals.by_month:
+            if item.month == month:
+                warnings = ["Totales de la cadena para el mes, según la facturación cargada."]
+                return self._result("ok", item.model_dump(mode="json"), period, "CLP y kWh", self._sources(snapshot),
+                                    [*warnings, *self._period_warning(snapshot, year)])
+        return self._result("not_found", None, period, None, self._sources(snapshot),
+                            [f"No hay facturación de {year} para el mes {month}."])
 
     def _find_store(self, snapshot: EnergySnapshot, name: str) -> Store | None:
         target = _normalise(name)
@@ -150,6 +166,50 @@ class EnergyTools:
                 return self._result("not_found", None, year, "CLP y BTU", self._sources(snapshot), ["No hay datos de chiller para el año solicitado."])
         warnings = [snapshot.chiller.note] if snapshot.chiller.note else []
         return self._result("ok", data, period, "CLP y BTU", self._sources(snapshot), warnings)
+
+    def get_equipment(self, store: str | None = None) -> dict[str, Any]:
+        snapshot = self._snapshot()
+        if snapshot is None:
+            return self._unavailable()
+        equipment = snapshot.equipment
+        if equipment is None:
+            return self._result("not_found", None, None, None, self._sources(snapshot), ["El snapshot no contiene la auditoría de equipos."])
+        warnings = [str(equipment["note"])] if equipment.get("note") else []
+        unit = "kWh anuales estimados, unidades y lm/W"
+        if store is None:
+            return self._result("ok", equipment, "auditoría de equipos", unit, self._sources(snapshot), warnings)
+        target = _normalise(store)
+        for item in equipment.get("stores", []):
+            candidates = [str(item.get("name", "")), *(str(alias) for alias in item.get("aliases", []))]
+            if target in {_normalise(candidate) for candidate in candidates}:
+                return self._result("ok", item, "auditoría de equipos", unit, self._sources(snapshot), warnings)
+        audited = ", ".join(str(item.get("name")) for item in equipment.get("stores", []))
+        return self._result("not_found", None, "auditoría de equipos", None, self._sources(snapshot),
+                            [f"Tienda no auditada. Tiendas con auditoría: {audited}."])
+
+    def get_indicators(self, year: int, site: str | None = None) -> dict[str, Any]:
+        snapshot = self._snapshot()
+        if snapshot is None:
+            return self._unavailable()
+        indicators = snapshot.indicators
+        if indicators is None:
+            return self._result("not_found", None, year, None, self._sources(snapshot), ["El snapshot no contiene indicadores."])
+        by_year = indicators.get("by_year", {})
+        data = by_year.get(str(year), by_year.get(year))
+        if data is None:
+            return self._result("not_found", None, year, None, self._sources(snapshot), ["No hay indicadores para el año solicitado."])
+        warnings = [str(indicators["note"])] if indicators.get("note") else []
+        if data.get("partial"):
+            warnings.append(f"Indicadores de {year} con datos parciales: no están anualizados.")
+        warnings += self._period_warning(snapshot, year)
+        unit = "kWh/m², kWh/hora, CLP/m² y tCO₂e"
+        if site is None:
+            return self._result("ok", data, year, unit, self._sources(snapshot), warnings)
+        target = _normalise(site)
+        for item in data.get("sites", []):
+            if _normalise(str(item.get("name", ""))) == target:
+                return self._result("ok", item, year, unit, self._sources(snapshot), warnings)
+        return self._result("not_found", None, year, None, self._sources(snapshot), ["Localidad sin indicadores para ese año."])
 
     def get_data_info(self) -> dict[str, Any]:
         snapshot = self._snapshot()

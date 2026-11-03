@@ -1,7 +1,7 @@
 """Authenticated, read-only client for the existing Energy Tools HTTP API.
 
 The adapter is intentionally provider-neutral: Pipecat (or any other voice
-orchestrator) can call its six methods without importing dashboard internals or
+orchestrator) can call its eight methods without importing dashboard internals or
 sharing the in-memory snapshot repository.
 """
 
@@ -44,7 +44,7 @@ class EnergyAPISettings:
 
 
 class VoiceEnergyAdapter:
-    """Maps the six published Energy Tools contracts to authenticated GET calls.
+    """Maps the eight published Energy Tools contracts to authenticated GET calls.
 
     Errors are returned as safe Energy Tools-shaped results so a future voice
     handler can explain a local failure without leaking token, snapshot or HTTP
@@ -57,6 +57,8 @@ class VoiceEnergyAdapter:
         "rank_stores",
         "get_solar",
         "get_chiller",
+        "get_equipment",
+        "get_indicators",
         "get_data_info",
     }
 
@@ -108,8 +110,8 @@ class VoiceEnergyAdapter:
             return self._error("protocol_error", "La API energética devolvió una respuesta no compatible.")
         return self._normalise(payload)
 
-    def get_overview(self, year: int) -> Result:
-        return self._get("/energy/overview", {"year": year})
+    def get_overview(self, year: int, month: int | None = None) -> Result:
+        return self._get("/energy/overview", {"year": year, "month": month})
 
     def get_store(self, name: str, year: int) -> Result:
         return self._get(f"/energy/stores/{quote(name, safe='')}", {"year": year})
@@ -122,6 +124,12 @@ class VoiceEnergyAdapter:
 
     def get_chiller(self, year: int | None = None) -> Result:
         return self._get("/energy/chiller", {"year": year})
+
+    def get_equipment(self, store: str | None = None) -> Result:
+        return self._get("/energy/equipment", {"store": store})
+
+    def get_indicators(self, year: int, site: str | None = None) -> Result:
+        return self._get("/energy/indicators", {"year": year, "site": site})
 
     def get_data_info(self) -> Result:
         return self._get("/energy/data-info")

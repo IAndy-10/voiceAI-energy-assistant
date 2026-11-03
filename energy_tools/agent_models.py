@@ -17,9 +17,11 @@ class AgentChatRequest(StrictModel):
 
 class OverviewArgs(StrictModel):
     year: int = Field(ge=2000, le=2100)
+    month: int | None = Field(default=None, ge=1, le=12)
 
 
-class StoreArgs(OverviewArgs):
+class StoreArgs(StrictModel):
+    year: int = Field(ge=2000, le=2100)
     name: str = Field(min_length=1, max_length=120)
 
 
@@ -35,6 +37,15 @@ class SolarArgs(StrictModel):
 
 class ChillerArgs(StrictModel):
     year: int | None = Field(default=None, ge=2000, le=2100)
+
+
+class EquipmentArgs(StrictModel):
+    store: str | None = Field(default=None, max_length=120)
+
+
+class IndicatorsArgs(StrictModel):
+    year: int = Field(ge=2000, le=2100)
+    site: str | None = Field(default=None, max_length=120)
 
 
 class DataInfoArgs(StrictModel):

@@ -11,7 +11,7 @@ from typing import Any, Callable
 from pydantic import BaseModel, ValidationError
 
 from .agent_models import (
-    ChillerArgs, DataInfoArgs, OverviewArgs, RankingArgs, SolarArgs, StoreArgs,
+    ChillerArgs, DataInfoArgs, EquipmentArgs, IndicatorsArgs, OverviewArgs, RankingArgs, SolarArgs, StoreArgs,
 )
 from .agent_usage import BudgetExceeded, UsageLedger
 from .snapshot import SnapshotRepository
@@ -135,11 +135,16 @@ class VestaAgent:
 
     def _handlers(self) -> dict[str, ToolHandler]:
         return {
-            "get_overview": (OverviewArgs, lambda **a: self.energy_tools.get_overview(**a), "Resumen energético para un año."),
+            "get_overview": (OverviewArgs, lambda **a: self.energy_tools.get_overview(**a),
+                             "Costo y consumo de la cadena: total anual, o de un mes si month es 1-12."),
             "get_store": (StoreArgs, lambda **a: self.energy_tools.get_store(**a), "Datos de una sucursal y año."),
             "rank_stores": (RankingArgs, lambda **a: self.energy_tools.rank_stores(**a), "Ranking precomputado de sucursales."),
             "get_solar": (SolarArgs, lambda **a: self.energy_tools.get_solar(**a), "Datos solares globales o de una planta."),
             "get_chiller": (ChillerArgs, lambda **a: self.energy_tools.get_chiller(**a), "Costos de chiller por año o globales."),
+            "get_equipment": (EquipmentArgs, lambda **a: self.energy_tools.get_equipment(**a),
+                              "Auditoría de equipos (consumo estimado, categorías, top equipos, lm/W), global o de una tienda."),
+            "get_indicators": (IndicatorsArgs, lambda **a: self.energy_tools.get_indicators(**a),
+                               "Indicadores por localidad de un año: kWh/m², kWh/hora, CLP/m², tCO₂e; global o de una localidad."),
             "get_data_info": (DataInfoArgs, lambda **a: self.energy_tools.get_data_info(), "Periodo, fuentes y brechas del snapshot."),
         }
 

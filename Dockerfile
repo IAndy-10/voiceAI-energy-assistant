@@ -13,6 +13,7 @@ COPY requirements-runtime.txt ./
 RUN pip install --no-cache-dir -r requirements-runtime.txt
 COPY energy_tools ./energy_tools
 COPY voice_agent/web/dist ./voice_agent/web/dist
+COPY dashboard/dashboard.html ./dashboard/dashboard.html
 RUN mkdir -p /var/lib/vesta-agent
 EXPOSE 8000
 CMD ["uvicorn", "energy_tools.api:app", "--host", "0.0.0.0", "--port", "8000"]
