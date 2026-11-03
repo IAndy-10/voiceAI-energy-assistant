@@ -90,6 +90,10 @@ table.dtbl tr.partial{background:#fff8e1}
 .assist-warn summary{cursor:pointer;color:#6b7280}
 .assist-warn ul{margin:4px 0 0 16px;color:#4b5563}
 .assist-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid #e5e7eb;align-items:center}
+.assist-voice{padding:6px 16px;font-size:.78rem;color:#1a3a5c;background:#eaf4fb;border-bottom:1px solid #d6e9f5}
+.assist-mic{padding:6px 10px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:.95rem;cursor:pointer;line-height:1}
+.assist-mic.on{background:#dc2626;border-color:#dc2626;color:#fff}
+.assist-mic:disabled{opacity:.4;cursor:not-allowed}
 .assist-foot select{padding:7px;border:1px solid #ccc;border-radius:8px;font-size:.8rem;background:#fff}
 </style>
 </head>
@@ -231,12 +235,14 @@ table.dtbl tr.partial{background:#fff8e1}
 <aside id="assist-panel" aria-label="Asistente energético">
   <div class="assist-head"><h2>💬 Asistente Vesta</h2><button class="assist-close" onclick="toggleAssistant(false)" title="Cerrar">×</button></div>
   <div id="assist-status" class="assist-status idle">Desconectado</div>
+  <div id="assist-voice" class="assist-voice" style="display:none"></div>
   <form id="assist-auth" onsubmit="saveAssistToken(event)" style="display:none">
     <input id="assist-token" type="password" placeholder="Token de la API" autocomplete="off">
     <button class="hdr-btn primary" type="submit">Conectar</button>
   </form>
   <div id="assist-log"><div class="assist-empty">Pregunte por costos, consumo, sucursales, solar o chiller.<br>Las cifras salen de los datos cargados en este dashboard.</div></div>
   <form class="assist-foot" onsubmit="askAssistant(event)">
+    <button id="assist-mic" class="assist-mic" type="button" onclick="toggleVoice()" disabled title="Voz AI no disponible">🎙</button>
     <select id="assist-mode" title="Motor de respuesta" onchange="assist.modeTouched=true"><option value="local">Local</option><option value="openai" disabled>OpenAI</option></select>
     <input id="assist-q" placeholder="Escriba su pregunta…" maxlength="2000" disabled autocomplete="off">
     <button id="assist-send" class="hdr-btn primary" type="submit" disabled>Enviar</button>
@@ -1388,18 +1394,20 @@ async function detectAssistant(){
     var d=await r.json();if(!d||d.status!=='ok'||!('snapshot_loaded' in d))return;
   }catch(e){return;}
   document.getElementById('btn-assist').style.display='';
+  try{var v=await fetch('/voice/config',{cache:'no-store'});voice.config=v.ok?await v.json():null;}catch(e){voice.config=null;}
+  updateAssistControls();
 }
 function toggleAssistant(force){
   var p=document.getElementById('assist-panel');
   var open=force!=null?force:!p.classList.contains('open');
   p.classList.toggle('open',open);
-  if(!open)return;
+  if(!open){stopVoice('');return;}
   if(!assistToken())showAssistToken('');
   else if(!assist.synced)syncAssistant();
   else document.getElementById('assist-q').focus();
 }
 function showAssistToken(msg){
-  assist.synced=false;
+  assist.synced=false;stopVoice('');
   document.getElementById('assist-auth').style.display='';
   document.getElementById('assist-token').focus();
   assistStatus(msg?'error':'idle',msg||'Ingrese el token de la API para conectar.');
@@ -1498,10 +1506,88 @@ function addAssistMsg(role,text){
 function updateAssistControls(){
   document.getElementById('assist-q').disabled=!assist.synced;
   document.getElementById('assist-send').disabled=!assist.synced||assist.busy;
+  var mic=document.getElementById('assist-mic');var why=voiceBlocker();
+  mic.disabled=!!why&&!voice.client;mic.classList.toggle('on',!!voice.client);
+  mic.title=voice.client?'Detener Voz AI':(why||'Hablar con Voz AI');
   var sel=document.getElementById('assist-mode');
   sel.querySelector('option[value="openai"]').disabled=!assist.openai;
   if(!assist.openai&&sel.value==='openai')sel.value='local';
 }
+/* ── Voz AI en el mismo panel (Nivel 2) ──
+   Same flow as /demo: a one-use grant from /voice/sessions, then the Pipecat client from
+   /voice/client.js. Transcripts and replies land in the same chat. The voice agent has its
+   own LLM context; it queries the same tools over the API. */
+var voice={config:null,client:null,module:null,user:null,bot:null,segs:{},order:[],notice:''};
+function voiceBlocker(){
+  var c=voice.config;
+  if(!c||!c.enabled)return'Voz desactivada en el servidor.';
+  if(!c.capabilities||!c.capabilities.voice_ai_allowed)return'Voz AI no habilitada en el servidor (VOICE_PIPELINE_ENABLED).';
+  if(!c.runner_available)return'El agente de voz no está disponible (perfil voice de Docker).';
+  if(!assist.synced)return'Conecte y sincronice los datos primero.';
+  return'';
+}
+function voiceState(text){var el=document.getElementById('assist-voice');el.style.display=text?'':'none';el.textContent=text?'🎙 '+text:'';}
+function toggleVoice(){if(voice.client)stopVoice('Voz AI detenida.');else startVoice();}
+async function startVoice(){
+  var why=voiceBlocker();if(why){voiceState(why);return;}
+  voice.notice='';voiceState('Conectando…');
+  try{
+    var h=await fetch('/health',{cache:'no-store'}).then(function(x){return x.json();});
+    if(!h.snapshot_loaded&&!(await syncAssistant()))throw new Error('no hay datos sincronizados.');
+    var gr=await fetch('/voice/sessions',{method:'POST',headers:assistHeaders(true),body:JSON.stringify({mode:'ai'})});
+    var grant=await gr.json().catch(function(){return null;});
+    if(gr.status===401){setAssistToken(null);showAssistToken('Token rechazado. Ingréselo de nuevo.');return;}
+    if(!gr.ok)throw new Error(assistErr(grant,'la sesión de voz fue rechazada.'));
+    voice.module=voice.module||await import('/voice/client.js');
+    var client=voice.module.createVestaVoiceClient({
+      onConnected:function(){voiceState('Conectado · esperando autorización…');},
+      onDisconnected:function(){if(voice.client===client)stopVoice(voice.notice||'Voz AI desconectada.');},
+      onError:function(){if(voice.client===client)stopVoice('No se pudo establecer el audio (WebRTC).');},
+      onServerMessage:function(data){
+        if(data&&data.type==='voice_unavailable'){voice.notice='Voz AI no disponible: '+(data.message||'revise la configuración del servidor.');stopVoice(voice.notice);return;}
+        var s=data&&data.voice_session;if(!s)return;
+        if(s.mode==='ai'&&s.authorized===true)voiceState('Escuchando · hable cuando quiera');
+        else stopVoice('La autorización de Voz AI fue rechazada o venció.');
+      },
+      onUserStartedSpeaking:function(){voiceState('Escuchando…');voice.bot=null;},
+      onUserStoppedSpeaking:function(){voiceState('Procesando…');},
+      onBotStartedSpeaking:function(){voiceState('Vesta está hablando…');},
+      onBotStoppedSpeaking:function(){voiceState('Escuchando · hable cuando quiera');},
+      onUserTranscript:voiceUserText,
+      onBotOutput:voiceBotText
+    });
+    voice.client=client;updateAssistControls();
+    await client.startBotAndConnect({endpoint:voice.config.pipecat_url+'/start',
+      requestData:{body:{voice_session_token:grant.session_token,mode:grant.mode}}});
+  }catch(e){
+    console.error('[Voz] start failed',e);
+    stopVoice('No se pudo iniciar Voz AI: '+(e&&e.message||'error desconocido'));
+  }
+}
+function stopVoice(message){
+  var c=voice.client;voice.client=null;voice.user=null;voice.bot=null;
+  if(c)c.disconnect().catch(function(){});
+  voiceState(message);updateAssistControls();
+}
+// The user bubble is updated with interim text and closed on the final transcript.
+function voiceUserText(data){
+  if(!data||!data.text)return;
+  if(!voice.user){voice.user=addAssistMsg('user','');voice.user.meta.textContent='🎙 Voz';voice.bot=null;}
+  voice.user.text.textContent=data.text;
+  if(data.final!==false)voice.user=null;
+  var log=document.getElementById('assist-log');log.scrollTop=log.scrollHeight;
+}
+// RTVI v2 can resend a segment as its spoken status changes; keep one copy per segment_id.
+function voiceBotText(data){
+  if(!data||!data.text)return;
+  if(!voice.bot){voice.bot=addAssistMsg('bot','');voice.bot.meta.textContent='🎙 Voz AI';voice.segs={};voice.order=[];}
+  var key=data.segment_id!=null?'s'+data.segment_id:'n'+voice.order.length;
+  if(!(key in voice.segs))voice.order.push(key);
+  voice.segs[key]=data.text;
+  setAssistText(voice.bot.text,voice.order.map(function(k){return voice.segs[k];}).join(' '));
+  var log=document.getElementById('assist-log');log.scrollTop=log.scrollHeight;
+}
+window.addEventListener('beforeunload',function(){if(voice.client)voice.client.disconnect().catch(function(){});});
 detectAssistant();
 </script>
 </body>

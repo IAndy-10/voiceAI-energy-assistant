@@ -175,6 +175,7 @@ def test_app_serves_the_dashboard_with_the_assistant_panel():
     assert response.headers["cache-control"] == "no-store"
     assert "function buildSnapshot()" in response.text
     assert 'id="assist-panel"' in response.text
+    assert 'id="assist-mic"' in response.text and "import('/voice/client.js')" in response.text
 
 
 def test_voice_configuration_declares_openai_direct_as_not_implemented(monkeypatch):
