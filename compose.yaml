@@ -32,7 +32,9 @@ services:
       VOICE_ENABLED: ${VOICE_ENABLED:-true}
       VOICE_PROVIDER: ${VOICE_PROVIDER:-pipecat}
       VOICE_PIPECAT_URL: ${VOICE_PIPECAT_URL:-http://127.0.0.1:7860}
-      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-${OPENAI_ENABLED:-false}}
+      # Browser URL and container-side health URL can differ for a Windows runner.
+      VOICE_RUNNER_HEALTH_URL: ${VOICE_RUNNER_HEALTH_URL:-http://voice-agent:7860}
+      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}
       VOICE_MAX_SESSION_SECONDS: ${VOICE_SESSION_MAX_SECONDS:-300}
       VOICE_MAX_RECORDING_SECONDS: ${VOICE_MAX_RECORDING_SECONDS:-30}
     ports:
@@ -68,9 +70,9 @@ services:
       VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}
       VOICE_ENERGY_API_BASE_URL: http://energy-api:8000
       VOICE_ENERGY_API_TOKEN: ${ENERGY_TOOLS_API_TOKEN:?Set ENERGY_TOOLS_API_TOKEN in your shell or .env file}
-      # Same key and switch as the AI assistant tab; VOICE_PIPELINE_ENABLED overrides the switch.
+      # The audio pipeline has its own opt-in; enabling text AI must not start it.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-${OPENAI_ENABLED:-false}}
+      VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}
       # aiortc uses the first host (Compose network); the browser uses 127.0.0.1.
       PIPECAT_TURN_HOST: turn-local,127.0.0.1
@@ -95,6 +97,14 @@ services:
       - "127.0.0.1:7860:7860"
     volumes:
       - voice-usage:/var/lib/vesta-voice
+    restart: unless-stopped
+    healthcheck:
+      # Runner reachability only; an HTTP response does not prove ICE/media.
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:7860/client/', timeout=2).read(1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
 
 volumes:
   agent-usage:

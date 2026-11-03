@@ -7,9 +7,11 @@ becomes unusable (for example a rejected API key).
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 from loguru import logger
 from pipecat.frames.frames import LLMRunFrame
+from pipecat.frames.frames import OutputTransportMessageUrgentFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker, ProcessorUnusablePolicy
 from pipecat.processors.frameworks.rtvi import RTVIProcessor, RTVIServerMessageFrame
@@ -22,6 +24,12 @@ from pipecat.workers.runner import WorkerRunner
 from voice_agent.energy_api import EnergyAPISettings, VoiceEnergyAdapter
 from voice_agent.voice_budget import VoiceBudgetExceeded, VoiceUsageLedger
 from voice_agent.voice_pipeline import GREETING, VoicePipelineSettings, VoiceSession, build_pipeline, create_context
+from voice_agent.voice_session_api import validate_voice_session
+
+
+def _pipeline_mode(authorized_mode: str | None, pipeline_enabled: bool) -> str:
+    """Choose AI only after the runner has consumed a matching grant."""
+    return "ai" if authorized_mode == "ai" and pipeline_enabled else "minimal"
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:
@@ -39,10 +47,16 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
             ledger.settle_session(settings.session_budget_usd)
             settled = True
 
-    # Services are not constructed until the client connects and the persistent
-    # reservation succeeds. Default mode retains the zero-provider test pipeline.
-    if settings.enabled:
+    body = runner_args.body if isinstance(runner_args.body, dict) else {}
+    authorized_mode = await asyncio.to_thread(
+        validate_voice_session, body.get("voice_session_token"), body.get("mode")
+    )
+    # An opaque grant is required for an AI session. Direct runner requests can
+    # still exercise transport, but can never construct a billable provider.
+    ai_requested = _pipeline_mode(authorized_mode, settings.enabled) == "ai"
+    if ai_requested:
         try:
+            settings = replace(settings, enabled=True)
             settings.validate_for_real_use()
             ledger.reserve_session(settings.session_budget_usd, settings.budget_usd, settings.max_sessions)
             reserved = True
@@ -55,6 +69,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
             unavailable_reason = str(exc)
             pipeline = Pipeline([transport.input(), transport.output()])
     else:
+        if authorized_mode != "minimal":
+            logger.warning("voice_pipeline_not_started reason=missing_or_invalid_session_grant")
         pipeline = Pipeline([transport.input(), transport.output()])
 
     rtvi = RTVIProcessor()
@@ -73,6 +89,12 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
     @transport.event_handler("on_client_connected")
     async def on_client_connected(_transport, _client):
         logger.info("SmallWebRTC client connected")
+        # The browser uses this non-secret acknowledgement to distinguish a
+        # connected transport from an AI pipeline actually authorized here.
+        await transport.output().send_message(OutputTransportMessageUrgentFrame(message={
+            "type": "server-message",
+            "data": {"voice_session": {"mode": authorized_mode or "minimal", "authorized": authorized_mode is not None}},
+        }))
         if context is not None:
             context.add_message({"role": "user", "content": GREETING})
             await worker.queue_frames([LLMRunFrame()])

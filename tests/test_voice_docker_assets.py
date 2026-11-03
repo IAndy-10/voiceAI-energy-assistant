@@ -14,13 +14,22 @@ def test_voice_runtime_is_isolated_and_pinned():
     assert "python -m voice_agent.smoke_test" in dockerfile
 
 
-def test_voice_service_is_opt_in_local_and_internal_to_energy_api():
+def test_voice_service_is_opt_in_and_healthcheck_is_not_an_ice_claim():
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     assert "voice-agent:" in compose
-    assert 'profiles: ["voice"]' in compose
+    assert compose.count('profiles: ["voice"]') == 2
+    assert "restart: unless-stopped" in compose
+    assert "healthcheck:" in compose
+    assert "does not prove ICE/media" in compose
     assert "VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}" in compose
     assert "VOICE_ENERGY_API_BASE_URL: http://energy-api:8000" in compose
     assert "127.0.0.1:7860:7860" in compose
+
+
+def test_energy_api_receives_the_browser_safe_voice_pipeline_state():
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    energy_api = compose.split("  voice-agent:", 1)[0]
+    assert "VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}" in energy_api
 
 
 def test_voice_command_keeps_python_executable_before_runner_arguments():
@@ -56,7 +65,7 @@ def test_turn_diagnostic_uses_pinned_image_and_private_runtime_configuration():
     assert "TURN_SHARED_SECRET" not in diagnostic
 
 
-def test_voice_profile_relays_media_through_loopback_turn_and_shares_openai_switch():
+def test_voice_profile_relays_media_through_loopback_turn_with_explicit_pipeline_opt_in():
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
     assert "turn-local:" in compose
     assert "coturn/coturn:4.6.3-r3-alpine" in compose
@@ -66,5 +75,5 @@ def test_voice_profile_relays_media_through_loopback_turn_and_shares_openai_swit
     # The bot (aiortc) uses the first TURN host, so the Compose service name goes first.
     assert "PIPECAT_TURN_HOST: turn-local,127.0.0.1" in compose
     assert "TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}" in compose
-    assert compose.count("VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-${OPENAI_ENABLED:-false}}") == 2
+    assert compose.count("VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}") == 2
     assert "VOICE_PIPECAT_URL: ${VOICE_PIPECAT_URL:-http://127.0.0.1:7860}" in compose

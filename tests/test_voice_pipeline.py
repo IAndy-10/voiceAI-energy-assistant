@@ -130,22 +130,16 @@ def test_voice_pipeline_requires_opt_in_key_and_valid_reservation(monkeypatch):
     monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
     with pytest.raises(VoiceBudgetExceeded):
         VoicePipelineSettings.from_env().validate_for_real_use()
+
+
+def test_openai_switch_does_not_enable_voice_pipeline(monkeypatch):
+    monkeypatch.delenv("VOICE_PIPELINE_ENABLED", raising=False)
+    monkeypatch.setenv("OPENAI_ENABLED", "true")
+    assert VoicePipelineSettings.from_env().enabled is False
     monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "true")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(VoiceBudgetExceeded):
         VoicePipelineSettings.from_env().validate_for_real_use()
-
-
-def test_voice_pipeline_follows_the_openai_switch_unless_overridden(monkeypatch):
-    monkeypatch.delenv("VOICE_PIPELINE_ENABLED", raising=False)
-    monkeypatch.setenv("OPENAI_ENABLED", "true")
-    monkeypatch.setenv("OPENAI_MODEL", "gpt-6-luna")
-    monkeypatch.delenv("VOICE_LLM_MODEL", raising=False)
-    settings = VoicePipelineSettings.from_env()
-    assert settings.enabled is True
-    assert settings.llm_model == "gpt-6-luna"
-    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
-    assert VoicePipelineSettings.from_env().enabled is False
 
 
 def test_openai_services_are_configured_through_settings_without_network():
