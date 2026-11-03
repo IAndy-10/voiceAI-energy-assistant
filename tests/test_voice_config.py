@@ -18,12 +18,24 @@ def test_voice_limits_are_positive_and_do_not_expose_private_stt_tts_settings(mo
     assert "tts_provider" not in payload
 
 
-def test_voice_pipeline_follows_the_openai_switch_unless_overridden(monkeypatch):
+def test_pipeline_capabilities_are_exposed_only_when_explicitly_enabled(monkeypatch):
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "true")
+    payload = VoiceSettings.from_env().public()
+    assert payload["pipeline_enabled"] is True
+    assert payload["capabilities"]["transcription"] is True
+    assert payload["capabilities"]["assistant_audio"] is True
+
+
+def test_openai_switch_does_not_enable_voice_pipeline(monkeypatch):
     monkeypatch.delenv("VOICE_PIPELINE_ENABLED", raising=False)
     monkeypatch.setenv("OPENAI_ENABLED", "true")
-    assert VoiceSettings.from_env().public()["pipeline_enabled"] is True
-    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
     assert VoiceSettings.from_env().public()["pipeline_enabled"] is False
-    monkeypatch.delenv("VOICE_PIPELINE_ENABLED")
-    monkeypatch.delenv("OPENAI_ENABLED")
-    assert VoiceSettings.from_env().public()["pipeline_enabled"] is False
+
+
+def test_windows_runner_uses_public_browser_url_and_distinct_container_health_url(monkeypatch):
+    monkeypatch.setenv("VOICE_PIPECAT_URL", "http://127.0.0.1:7861")
+    monkeypatch.setenv("VOICE_RUNNER_HEALTH_URL", "http://host.docker.internal:7861")
+    settings = VoiceSettings.from_env()
+    assert settings.pipecat_url == "http://127.0.0.1:7861"
+    assert settings.runner_health_url == "http://host.docker.internal:7861"
+    assert "health" not in settings.public()

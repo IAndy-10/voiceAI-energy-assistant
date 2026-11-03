@@ -77,8 +77,9 @@ class VoicePipelineSettings:
     def from_env(cls) -> "VoicePipelineSettings":
         integer = lambda key, default: max(1, int(os.getenv(key, str(default))))
         decimal = lambda key, default: float(os.getenv(key, str(default)))
-        # Voice follows the AI assistant's OpenAI switch unless explicitly overridden.
-        enabled = os.getenv("VOICE_PIPELINE_ENABLED") or os.getenv("OPENAI_ENABLED", "false")
+        # Voice requires its own explicit opt-in.  Enabling the text assistant
+        # must never start paid audio-provider services as a side effect.
+        enabled = os.getenv("VOICE_PIPELINE_ENABLED", "false")
         return cls(
             enabled=enabled.strip().lower() == "true",
             api_key=os.getenv("OPENAI_API_KEY"),
@@ -205,7 +206,7 @@ def create_openai_services(settings: VoicePipelineSettings) -> VoiceServices:
                 max_completion_tokens=settings.llm_max_tokens,
                 # Chat Completions rejects function tools at the model's default
                 # reasoning effort (HTTP 400), which ends the session on connect.
-                extra={"reasoning_effort": "none"},
+                extra={"reasoning_effort": "none"} if settings.llm_model == "gpt-6-luna" else {},
             ),
         ),
         tts=OpenAITTSService(
