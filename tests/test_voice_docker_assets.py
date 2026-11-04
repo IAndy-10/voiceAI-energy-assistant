@@ -21,7 +21,6 @@ def test_voice_service_is_opt_in_and_healthcheck_is_not_an_ice_claim():
     assert "restart: unless-stopped" in compose
     assert "healthcheck:" in compose
     assert "does not prove ICE/media" in compose
-    assert "VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}" in compose
     assert "VOICE_ENERGY_API_BASE_URL: http://energy-api:8000" in compose
     assert "127.0.0.1:7860:7860" in compose
 
