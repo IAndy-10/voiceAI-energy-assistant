@@ -127,5 +127,10 @@ async def bot(runner_args: RunnerArguments) -> None:
 
 
 if __name__ == "__main__":
+    # Entry point of scripts/start-voice-windows.ps1 (no TURN). /start still
+    # requires an API-issued grant, as in the Docker runner.
+    from voice_agent.start_guard import install_start_guard
+
+    install_start_guard()
     from pipecat.runner.run import main
     main()

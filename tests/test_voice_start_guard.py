@@ -128,3 +128,11 @@ def test_check_voice_session_skips_the_api_for_missing_values(monkeypatch):
     monkeypatch.setattr(voice_session_api, "urlopen", boom)
     for token, mode in ((None, "ai"), ("", "ai"), ("t", None), (1, "ai")):
         assert voice_session_api.check_voice_session(token, mode) is None
+
+
+def test_windows_runner_also_installs_the_guard_before_starting_pipecat():
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[1] / "voice_agent" / "webrtc_runner.py").read_text(encoding="utf-8")
+    main_block = source.split('if __name__ == "__main__":', 1)[1]
+    assert main_block.index("install_start_guard()") < main_block.index("main()")

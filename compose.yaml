@@ -67,7 +67,6 @@ services:
     # Origins come from VOICE_ALLOWED_ORIGINS; a CLI --allowed-origins would override it.
     command: ["python", "-m", "voice_agent.webrtc_turn_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860"]
     environment:
-      VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}
       VOICE_ENERGY_API_BASE_URL: http://energy-api:8000
       VOICE_ENERGY_API_TOKEN: ${ENERGY_TOOLS_API_TOKEN:?Set ENERGY_TOOLS_API_TOKEN in your shell or .env file}
       # The audio pipeline has its own opt-in; enabling text AI must not start it.

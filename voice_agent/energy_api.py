@@ -16,6 +16,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
+from energy_contracts import TOOL_NAMES
+
 
 Result = dict[str, Any]
 Opener = Callable[..., Any]
@@ -50,17 +52,6 @@ class VoiceEnergyAdapter:
     handler can explain a local failure without leaking token, snapshot or HTTP
     response content.
     """
-
-    _allowed_tools = {
-        "get_overview",
-        "get_store",
-        "rank_stores",
-        "get_solar",
-        "get_chiller",
-        "get_equipment",
-        "get_indicators",
-        "get_data_info",
-    }
 
     def __init__(self, settings: EnergyAPISettings | None = None, *, opener: Opener = urlopen) -> None:
         self.settings = settings or EnergyAPISettings.from_env()
@@ -136,6 +127,6 @@ class VoiceEnergyAdapter:
 
     def call(self, tool_name: str, **arguments: Any) -> Result:
         """Dispatch a pre-authorized tool name for a future function handler."""
-        if tool_name not in self._allowed_tools:
+        if tool_name not in TOOL_NAMES:
             return self._error("invalid_request", "Herramienta energética no autorizada.")
         return getattr(self, tool_name)(**arguments)

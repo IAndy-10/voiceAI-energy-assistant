@@ -6,13 +6,10 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from energy_contracts import TOOLS, parameters_schema, validate_arguments
 
-from .agent_models import (
-    ChillerArgs, DataInfoArgs, EquipmentArgs, IndicatorsArgs, OverviewArgs, RankingArgs, SolarArgs, StoreArgs,
-)
 from .agent_usage import BudgetExceeded, UsageLedger
 from .snapshot import SnapshotRepository
 from .tools import EnergyTools
@@ -90,9 +87,6 @@ class AgentSettings:
         return max(self.reserve_usd, worst)
 
 
-ToolHandler = tuple[type[BaseModel], Callable[..., dict[str, Any]], str]
-
-
 class VestaAgent:
     def __init__(self, repository: SnapshotRepository, client: Any | None = None, ledger: UsageLedger | None = None) -> None:
         self.repository = repository
@@ -133,31 +127,10 @@ class VestaAgent:
             state = "available"
         return {"status": state, "model": settings.model, "limits": self._ledger(settings).status(settings.budget_usd)}
 
-    def _handlers(self) -> dict[str, ToolHandler]:
-        return {
-            "get_overview": (OverviewArgs, lambda **a: self.energy_tools.get_overview(**a),
-                             "Costo y consumo de la cadena: total anual, o de un mes si month es 1-12."),
-            "get_store": (StoreArgs, lambda **a: self.energy_tools.get_store(**a), "Datos de una sucursal y año."),
-            "rank_stores": (RankingArgs, lambda **a: self.energy_tools.rank_stores(**a), "Ranking precomputado de sucursales."),
-            "get_solar": (SolarArgs, lambda **a: self.energy_tools.get_solar(**a), "Datos solares globales o de una planta."),
-            "get_chiller": (ChillerArgs, lambda **a: self.energy_tools.get_chiller(**a), "Costos de chiller por año o globales."),
-            "get_equipment": (EquipmentArgs, lambda **a: self.energy_tools.get_equipment(**a),
-                              "Auditoría de equipos (consumo estimado, categorías, top equipos, lm/W), global o de una tienda."),
-            "get_indicators": (IndicatorsArgs, lambda **a: self.energy_tools.get_indicators(**a),
-                               "Indicadores por localidad de un año: kWh/m², kWh/hora, CLP/m², tCO₂e; global o de una localidad."),
-            "get_data_info": (DataInfoArgs, lambda **a: self.energy_tools.get_data_info(), "Periodo, fuentes y brechas del snapshot."),
-        }
-
     def tool_definitions(self) -> list[dict[str, Any]]:
-        definitions = []
-        for name, (model, _, description) in self._handlers().items():
-            schema = model.model_json_schema()
-            # Responses strict mode requires every declared property to be required.
-            if schema.get("properties"):
-                schema["required"] = list(schema["properties"])
-            definitions.append({"type": "function", "name": name, "description": description,
-                                "parameters": schema, "strict": True})
-        return definitions
+        # Responses strict mode requires every declared property to be required.
+        return [{"type": "function", "name": tool.name, "description": tool.description,
+                 "parameters": parameters_schema(tool.args), "strict": True} for tool in TOOLS.values()]
 
     @staticmethod
     def _provider_error(exc: Exception) -> AgentProviderError:
@@ -256,15 +229,13 @@ class VestaAgent:
                 for call in calls:
                     name = getattr(call, "name", "")
                     call_id = getattr(call, "call_id", "")
-                    handler = self._handlers().get(name)
-                    if handler is None:
+                    if name not in TOOLS:
                         result = {"status": "invalid_request", "warnings": ["Herramienta no autorizada."]}
                     else:
-                        model, function, _ = handler
                         try:
-                            args = model.model_validate_json(getattr(call, "arguments", "{}"))
-                            result = function(**args.model_dump())
-                        except (ValidationError, ValueError, TypeError):
+                            args = validate_arguments(name, json.loads(getattr(call, "arguments", "{}")))
+                            result = getattr(self.energy_tools, name)(**args)
+                        except (ValueError, TypeError):
                             result = {"status": "invalid_request", "warnings": ["Argumentos de herramienta inválidos."]}
                     traces.append({"name": name, "period": result.get("period")})
                     warnings.extend(result.get("warnings", [])); sources.extend(result.get("source", []))

@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY voice_agent/requirements-voice.txt ./
 RUN pip install --no-cache-dir -r requirements-voice.txt
+COPY energy_contracts ./energy_contracts
 COPY voice_agent ./voice_agent
 RUN mkdir -p /var/lib/vesta-voice
 RUN python -m voice_agent.smoke_test
