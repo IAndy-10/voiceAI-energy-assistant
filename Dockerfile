@@ -11,6 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements-runtime.txt ./
 RUN pip install --no-cache-dir -r requirements-runtime.txt
+COPY energy_contracts ./energy_contracts
 COPY energy_tools ./energy_tools
 COPY voice_agent/web/dist ./voice_agent/web/dist
 COPY dashboard/dashboard.html ./dashboard/dashboard.html

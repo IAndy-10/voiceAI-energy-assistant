@@ -94,8 +94,17 @@ def test_tool_schemas_and_argument_validation_follow_public_energy_contracts():
     for bad_month in (0, 13, "7", True):
         with pytest.raises(ValueError):
             validate_tool_arguments("get_overview", {"year": 2025, "month": bad_month})
+    # A missing optional argument defaults to None; a missing required one is an error.
+    assert validate_tool_arguments("get_overview", {"year": 2025}) == {"year": 2025, "month": None}
     with pytest.raises(ValueError):
-        validate_tool_arguments("get_overview", {"year": 2025})
+        validate_tool_arguments("get_overview", {"month": 7})
+    for extra in ({"year": 2025, "month": None, "store": "x"}, {"year": 2025.0, "month": None}, {"year": "2025", "month": None}):
+        with pytest.raises(ValueError):
+            validate_tool_arguments("get_overview", extra)
+    with pytest.raises(ValueError):
+        validate_tool_arguments("get_solar", {"plant": "   "})
+    with pytest.raises(ValueError):
+        validate_tool_arguments("drop_tables", {})
     assert validate_tool_arguments("rank_stores", {"metric": "cost", "order": "asc", "top_n": 3})["order"] == "asc"
     with pytest.raises(ValueError):
         validate_tool_arguments("get_store", {"name": "Centro"})

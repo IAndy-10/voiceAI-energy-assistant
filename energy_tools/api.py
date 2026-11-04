@@ -12,6 +12,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, sta
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ValidationError
 
+from energy_contracts import TOOL_NAMES
+
 from .agent import AgentProviderError, AgentUnavailable, VestaAgent
 from .agent_models import AgentChatRequest
 from .agent_usage import BudgetExceeded
@@ -60,8 +62,7 @@ def health() -> dict[str, Any]:
 
 @app.get("/tools")
 def list_tools() -> dict[str, Any]:
-    return {"tools": ["get_overview", "get_store", "rank_stores", "get_solar", "get_chiller",
-                      "get_equipment", "get_indicators", "get_data_info"]}
+    return {"tools": list(TOOL_NAMES)}
 
 
 @app.post("/snapshot", dependencies=[Depends(require_data_token)])
