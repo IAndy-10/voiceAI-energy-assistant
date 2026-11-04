@@ -187,6 +187,17 @@ docker compose logs --since 30m voice-agent | python scripts/voice_latency.py
 
 El resumen muestra n, mediana, p90 y rango por servicio (`OpenAISTTService`, `OpenAILLMService`, `OpenAITTSService` o `ElevenLabsTTSService`). Compare proveedores con varias preguntas parecidas en cada uno.
 
+### Voz remota (Cloudflare Tunnel + Twilio TURN)
+
+Para que alguien en otra red use la voz, `/app` y el runner se exponen por túneles HTTPS de Cloudflare y el audio pasa por el TURN de Twilio. Los servicios siguen en `127.0.0.1`. Detalle y seguridad en [M04.9](docs/M04.9-REMOTE-VOICE.md).
+
+1. Agregue `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` a `.env`.
+2. Abra dos túneles: `cloudflared tunnel --url http://127.0.0.1:8000` y otro para `:7860`.
+3. En `.env`: `VOICE_TURN_MODE=twilio`, agregue la URL del túnel de `:8000` a `VOICE_ALLOWED_ORIGINS` y use la del túnel de `:7860` como `VOICE_PIPECAT_URL`.
+4. `docker compose --profile voice up -d --build` y pruebe desde otra red (por ejemplo, un celular con datos móviles).
+
+Las credenciales TURN de Twilio se renuevan solas antes de vencer. Cierre los túneles al terminar.
+
 ## Pruebas
 
 ```powershell
@@ -205,7 +216,7 @@ Las pruebas usan dobles/mocks para OpenAI y ElevenLabs y no consumen tokens ni c
 - La conversación completa con proveedores reales todavía está pendiente de validación extremo a extremo.
 - `VOICE_PIPELINE_ENABLED=false` es el valor inicial y no realiza llamadas externas.
 - Que el runner figure disponible o devuelva `HTTP 200` no prueba una conexión ICE; Docker Desktop sigue pendiente de validación manual desde Chrome.
-- `VOICE_PROVIDER=openai_direct`, Ollama, Piper, STT local y Twilio no están implementados.
+- `VOICE_PROVIDER=openai_direct`, Ollama, Piper, STT local y Twilio como canal telefónico no están implementados. Twilio sí se usa como TURN para la voz remota.
 
 ## Colaboración y Pull Requests
 
@@ -220,6 +231,7 @@ Resumen sugerido para revisión: validar el contrato de snapshot y las seis Ener
 - [Cobertura de datos](docs/M03.5-DATA-COVERAGE.md)
 - [Integración Pipecat M04.1](docs/M04.1-PIPECAT-INTEGRATION.md)
 - [WebRTC M04.2](docs/M04.2B-PIPECAT-WEBRTC.md)
+- [Voz remota M04.9](docs/M04.9-REMOTE-VOICE.md)
 - [Arquitectura de voz M04.3](docs/M04.3-VOICE-ARCHITECTURE.md)
 - [Pipeline Energy Tools M04.4](docs/M04.4-PIPECAT-ENERGY-PIPELINE.md)
 - [Primera conversación controlada M04.5](docs/M04.5-FIRST-VOICE-TEST.md)
