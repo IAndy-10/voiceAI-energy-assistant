@@ -176,6 +176,9 @@ def test_app_serves_the_dashboard_with_the_assistant_panel():
     assert "function buildSnapshot()" in response.text
     assert 'id="assist-panel"' in response.text
     assert 'id="assist-mic"' in response.text and "import('/voice/client.js')" in response.text
+    # Analysis views from the original dashboard: luminaires per m² and the monthly indicators view.
+    assert '<canvas id="equip-c4">' in response.text and "sector==='Sala de venta'" in response.text
+    assert 'id="indic-mes"' in response.text and "function indicMonthRows(" in response.text
 
 
 def test_voice_configuration_declares_openai_direct_as_not_implemented(monkeypatch):
