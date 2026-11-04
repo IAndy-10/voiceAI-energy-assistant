@@ -38,8 +38,6 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333}
 #btn-reload,.hdr-btn{padding:6px 16px;background:#f0f2f5;border:1px solid #ccc;border-radius:8px;font-size:.82rem;cursor:pointer;white-space:nowrap}
 .hdr-btn.primary{background:#2980b9;border-color:#2980b9;color:#fff;font-weight:600}
 .hdr-btn.primary:hover{background:#1a6fa0}
-#sync-status{font-size:.78rem;font-weight:600;white-space:nowrap}
-.sync-ok{color:#16a34a}.sync-error{color:#c0392b;white-space:normal!important}.sync-pending{color:#2980b9}.sync-info{color:#64748b}
 .tab-page{display:none;padding:20px 24px;max-width:1400px;margin:0 auto}
 .tab-page.active{display:block}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
@@ -135,8 +133,6 @@ table.dtbl tr.partial{background:#fff8e1}
     <button class="tab-btn" onclick="showTab('indic')" id="tb-indic" disabled title="Archivo no cargado">Indicadores</button>
   </div>
   <div class="hdr-actions">
-    <span id="sync-status"></span>
-    <button class="hdr-btn" onclick="downloadSnapshot()" title="Descarga agent_snapshot.json con los datos de este dashboard">⬇ Descargar snapshot</button>
     <button class="hdr-btn primary" id="btn-assist" style="display:none" onclick="toggleAssistant()" title="Preguntar sobre los datos cargados">💬 Asistente</button>
     <button id="btn-reload" onclick="location.reload()">↻ Recargar archivos</button>
   </div>
@@ -1420,22 +1416,6 @@ function buildSnapshot(){
   return snap;
 }
 
-function downloadSnapshot(){
-  try{
-    var snap=buildSnapshot();
-    var blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
-    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='agent_snapshot.json';
-    document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
-    setSyncStatus('info','Snapshot descargado · '+snap.generated_local.time);
-  }catch(e){
-    console.error('[Snapshot] build failed',e);
-    setSyncStatus('error','No se pudo generar el snapshot: '+e.message);
-  }
-}
-
-function setSyncStatus(kind,text){
-  var el=document.getElementById('sync-status');el.className='sync-'+kind;el.textContent=text;
-}
 /* ══════════════ ASISTENTE (/app) ══════════════ */
 // When energy_tools serves this page (/app), the panel syncs buildSnapshot() to the same
 // origin and chats over /agent/*. The dashboard stays the only place figures are computed.
