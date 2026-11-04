@@ -135,7 +135,6 @@ table.dtbl tr.partial{background:#fff8e1}
   <div class="hdr-actions">
     <span id="sync-status"></span>
     <button class="hdr-btn" onclick="downloadSnapshot()" title="Descarga agent_snapshot.json con los datos de este dashboard">⬇ Descargar snapshot</button>
-    <button class="hdr-btn primary" onclick="syncSnapshot(event)" title="Envía los datos al asistente de voz · Shift+clic para cambiar servidor o clave">⟳ Sincronizar asistente</button>
     <button class="hdr-btn primary" id="btn-assist" style="display:none" onclick="toggleAssistant()" title="Preguntar sobre los datos cargados">💬 Asistente</button>
     <button id="btn-reload" onclick="location.reload()">↻ Recargar archivos</button>
   </div>
@@ -1432,37 +1431,6 @@ function downloadSnapshot(){
   }
 }
 
-// Voice server URL is remembered per browser; the passcode only lives in memory for this session
-var VOICE_URL_KEY='mc_voice_url';
-var voicePasscode=null;
-function getVoiceUrl(force){
-  var u=null;
-  try{u=localStorage.getItem(VOICE_URL_KEY);}catch(e){u=null;}
-  if(!u||force){
-    u=prompt('URL del servidor del asistente (ej. https://multicentro-voz.fly.dev):',u||'');
-    if(!u)return null;
-    u=u.trim().replace(/\/+$/,'');
-    try{localStorage.setItem(VOICE_URL_KEY,u);}catch(e){console.warn('[Snapshot] could not remember voice URL',e);}
-  }
-  return u;
-}
-async function syncSnapshot(ev){
-  var force=!!(ev&&ev.shiftKey); // Shift+clic: cambiar servidor y clave
-  var url=getVoiceUrl(force);if(!url)return;
-  if(!voicePasscode||force){voicePasscode=prompt('Clave del asistente:');if(!voicePasscode)return;}
-  setSyncStatus('pending','Sincronizando…');
-  try{
-    var snap=buildSnapshot();
-    var res=await fetch(url+'/snapshot',{method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+voicePasscode},body:JSON.stringify(snap)});
-    if(res.status===401||res.status===403){voicePasscode=null;throw new Error('clave rechazada');}
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    setSyncStatus('ok','Asistente actualizado ✓ '+snap.generated_local.time+' · '+snap.sources.length+' archivos');
-  }catch(e){
-    console.error('[Snapshot] sync failed',e);
-    setSyncStatus('error','No se pudo sincronizar ('+e.message+'). Use "Descargar snapshot".');
-  }
-}
 function setSyncStatus(kind,text){
   var el=document.getElementById('sync-status');el.className='sync-'+kind;el.textContent=text;
 }
