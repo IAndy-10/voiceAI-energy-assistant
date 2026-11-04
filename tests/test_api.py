@@ -146,6 +146,21 @@ def test_voice_session_grants_are_authenticated_one_use_and_respect_global_voice
     assert client.post("/voice/sessions/validate", json={"session_token": grant["session_token"], "mode": "minimal"}, headers=headers).status_code == 401
 
 
+def test_voice_session_check_requires_the_api_token_and_leaves_the_grant_usable(monkeypatch):
+    monkeypatch.setenv("ENERGY_TOOLS_API_TOKEN", "test-token")
+    monkeypatch.setenv("VOICE_ENABLED", "true")
+    monkeypatch.setenv("VOICE_PROVIDER", "pipecat")
+    monkeypatch.setenv("VOICE_PIPELINE_ENABLED", "false")
+    client = TestClient(api.app); headers = {"Authorization": "Bearer test-token"}
+    grant = client.post("/voice/sessions", json={"mode": "minimal"}, headers=headers).json()
+    body = {"session_token": grant["session_token"], "mode": "minimal"}
+    assert client.post("/voice/sessions/check", json=body).status_code == 401
+    assert client.post("/voice/sessions/check", json=body, headers=headers).json() == {"mode": "minimal"}
+    assert client.post("/voice/sessions/check", json={**body, "mode": "ai"}, headers=headers).status_code == 401
+    assert client.post("/voice/sessions/validate", json=body, headers=headers).json() == {"mode": "minimal"}
+    assert client.post("/voice/sessions/check", json=body, headers=headers).status_code == 401
+
+
 def test_voice_session_ai_grant_requires_the_server_ceiling_and_a_loaded_snapshot(monkeypatch, valid_snapshot):
     monkeypatch.setenv("ENERGY_TOOLS_API_TOKEN", "test-token")
     monkeypatch.setenv("VOICE_ENABLED", "true")

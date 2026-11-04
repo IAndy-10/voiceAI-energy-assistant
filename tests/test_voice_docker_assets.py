@@ -86,3 +86,18 @@ def test_elevenlabs_settings_reach_only_the_voice_agent():
     assert "VOICE_TTS_PROVIDER: ${VOICE_TTS_PROVIDER:-openai}" in voice_agent
     assert "ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}" in voice_agent
     assert "ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_flash_v2_5}" in voice_agent
+
+
+def test_remote_voice_settings_are_variables_and_twilio_reaches_only_the_voice_agent():
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    energy_api, voice_agent = compose.split("  voice-agent:", 1)
+    # Origins come from one variable; a CLI --allowed-origins would silently override it.
+    command = next(line for line in voice_agent.splitlines() if line.strip().startswith("command:"))
+    assert "--allowed-origins" not in command
+    assert "VOICE_ALLOWED_ORIGINS: ${VOICE_ALLOWED_ORIGINS:-http://127.0.0.1:8000,http://localhost:8000}" in voice_agent
+    assert "VOICE_TURN_MODE: ${VOICE_TURN_MODE:-local}" in voice_agent
+    assert "TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}" in voice_agent
+    assert "TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}" in voice_agent
+    assert "TWILIO" not in energy_api
+    # Services stay on loopback; the HTTPS tunnel connects to 127.0.0.1.
+    assert "0.0.0.0:" not in compose.split("    ports:", 1)[1]

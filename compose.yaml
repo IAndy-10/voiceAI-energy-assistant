@@ -64,8 +64,8 @@ services:
       context: .
       dockerfile: voice_agent/Dockerfile
     profiles: ["voice"]
-    command: ["python", "-m", "voice_agent.webrtc_turn_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860",
-              "--allowed-origins", "http://127.0.0.1:8000", "http://localhost:8000"]
+    # Origins come from VOICE_ALLOWED_ORIGINS; a CLI --allowed-origins would override it.
+    command: ["python", "-m", "voice_agent.webrtc_turn_runner", "-t", "webrtc", "--host", "0.0.0.0", "--port", "7860"]
     environment:
       VOICE_AGENT_ENABLED: ${VOICE_AGENT_ENABLED:-false}
       VOICE_ENERGY_API_BASE_URL: http://energy-api:8000
@@ -73,9 +73,17 @@ services:
       # The audio pipeline has its own opt-in; enabling text AI must not start it.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}
+      # Dashboard origins allowed to open voice sessions (comma-separated, exact).
+      # Add the HTTPS tunnel origin of /app for a remote browser.
+      VOICE_ALLOWED_ORIGINS: ${VOICE_ALLOWED_ORIGINS:-http://127.0.0.1:8000,http://localhost:8000}
+      # local: coturn below, reachable only from this machine. twilio: Twilio TURN for remote browsers.
+      VOICE_TURN_MODE: ${VOICE_TURN_MODE:-local}
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}
       # aiortc uses the first host (Compose network); the browser uses 127.0.0.1.
       PIPECAT_TURN_HOST: turn-local,127.0.0.1
+      # Used only in VOICE_TURN_MODE=twilio. The token goes to this service only.
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       VOICE_TURN_TTL_SECONDS: ${VOICE_TURN_TTL_SECONDS:-86400}
       VOICE_SESSION_MAX_SECONDS: ${VOICE_SESSION_MAX_SECONDS:-300}
       VOICE_IDLE_TIMEOUT_SECONDS: ${VOICE_IDLE_TIMEOUT_SECONDS:-45}
