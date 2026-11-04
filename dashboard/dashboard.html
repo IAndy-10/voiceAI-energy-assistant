@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
 <title>Dashboard Energético — Multicentro</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -38,8 +38,6 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#333}
 #btn-reload,.hdr-btn{padding:6px 16px;background:#f0f2f5;border:1px solid #ccc;border-radius:8px;font-size:.82rem;cursor:pointer;white-space:nowrap}
 .hdr-btn.primary{background:#2980b9;border-color:#2980b9;color:#fff;font-weight:600}
 .hdr-btn.primary:hover{background:#1a6fa0}
-#sync-status{font-size:.78rem;font-weight:600;white-space:nowrap}
-.sync-ok{color:#16a34a}.sync-error{color:#c0392b;white-space:normal!important}.sync-pending{color:#2980b9}.sync-info{color:#64748b}
 .tab-page{display:none;padding:20px 24px;max-width:1400px;margin:0 auto}
 .tab-page.active{display:block}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
@@ -70,7 +68,7 @@ table.dtbl tr.partial{background:#fff8e1}
 .section-bar{display:flex;align-items:center;margin-bottom:20px;gap:12px}
 .section-bar h2{color:#1a3a5c;font-size:1.1rem}
 /* Asistente: panel lateral, solo cuando la API sirve el dashboard (/app) */
-#assist-panel{position:fixed;top:0;right:0;width:min(400px,100vw);height:100vh;background:#fff;box-shadow:-4px 0 18px rgba(0,0,0,.12);display:flex;flex-direction:column;transform:translateX(100%);visibility:hidden;transition:transform .2s,visibility .2s;z-index:1000}
+#assist-panel{position:fixed;top:0;right:0;width:min(400px,100vw);height:100vh;height:100dvh;background:#fff;box-shadow:-4px 0 18px rgba(0,0,0,.12);display:flex;flex-direction:column;transform:translateX(100%);visibility:hidden;transition:transform .2s,visibility .2s;z-index:1000}
 #assist-panel.open{transform:none;visibility:visible}
 .assist-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb}
 .assist-head h2{color:#1a3a5c;font-size:1.05rem}
@@ -89,12 +87,14 @@ table.dtbl tr.partial{background:#fff8e1}
 .assist-warn{font-size:.74rem;color:#92400e;margin-top:6px}
 .assist-warn summary{cursor:pointer;color:#6b7280}
 .assist-warn ul{margin:4px 0 0 16px;color:#4b5563}
-.assist-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid #e5e7eb;align-items:center}
+.assist-foot{display:flex;gap:8px;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid #e5e7eb;align-items:center}
 .assist-voice{padding:6px 16px;font-size:.78rem;color:#1a3a5c;background:#eaf4fb;border-bottom:1px solid #d6e9f5}
 .assist-mic{padding:6px 10px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:.95rem;cursor:pointer;line-height:1}
 .assist-mic.on{background:#dc2626;border-color:#dc2626;color:#fff}
 .assist-mic:disabled{opacity:.4;cursor:not-allowed}
 .assist-foot select{padding:7px;border:1px solid #ccc;border-radius:8px;font-size:.8rem;background:#fff}
+/* iOS Safari zooms into fields under 16px, pushing the fixed panel off screen */
+@media(max-width:600px){#assist-auth input,#assist-q,.assist-foot select{font-size:16px}}
 </style>
 </head>
 <body>
@@ -133,8 +133,6 @@ table.dtbl tr.partial{background:#fff8e1}
     <button class="tab-btn" onclick="showTab('indic')" id="tb-indic" disabled title="Archivo no cargado">Indicadores</button>
   </div>
   <div class="hdr-actions">
-    <span id="sync-status"></span>
-    <button class="hdr-btn" onclick="downloadSnapshot()" title="Descarga agent_snapshot.json con los datos de este dashboard">⬇ Descargar snapshot</button>
     <button class="hdr-btn primary" id="btn-assist" style="display:none" onclick="toggleAssistant()" title="Preguntar sobre los datos cargados">💬 Asistente</button>
     <button id="btn-reload" onclick="location.reload()">↻ Recargar archivos</button>
   </div>
@@ -1418,22 +1416,6 @@ function buildSnapshot(){
   return snap;
 }
 
-function downloadSnapshot(){
-  try{
-    var snap=buildSnapshot();
-    var blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
-    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='agent_snapshot.json';
-    document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
-    setSyncStatus('info','Snapshot descargado · '+snap.generated_local.time);
-  }catch(e){
-    console.error('[Snapshot] build failed',e);
-    setSyncStatus('error','No se pudo generar el snapshot: '+e.message);
-  }
-}
-
-function setSyncStatus(kind,text){
-  var el=document.getElementById('sync-status');el.className='sync-'+kind;el.textContent=text;
-}
 /* ══════════════ ASISTENTE (/app) ══════════════ */
 // When energy_tools serves this page (/app), the panel syncs buildSnapshot() to the same
 // origin and chats over /agent/*. The dashboard stays the only place figures are computed.
