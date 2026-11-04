@@ -90,6 +90,8 @@ if (-not $effective.Contains('VOICE_WINDOWS_ALLOWED_ORIGINS')) { $effective['VOI
 $pipelineEnabled = (Get-OptionalValue -Values $effective -Name 'VOICE_PIPELINE_ENABLED' -Default 'false').Trim().ToLowerInvariant() -eq 'true'
 [void](Get-RequiredValue -Values $effective -Name 'ENERGY_TOOLS_API_TOKEN')
 if ($pipelineEnabled) { [void](Get-RequiredValue -Values $effective -Name 'OPENAI_API_KEY') }
+$ttsProvider = (Get-OptionalValue -Values $effective -Name 'VOICE_TTS_PROVIDER' -Default 'openai').Trim().ToLowerInvariant()
+if ($pipelineEnabled -and $ttsProvider -eq 'elevenlabs') { [void](Get-RequiredValue -Values $effective -Name 'ELEVENLABS_API_KEY') }
 
 $python = Join-Path $repoRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw "No se encontro $python." }

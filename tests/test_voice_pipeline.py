@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 import pytest
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
@@ -14,7 +15,7 @@ from voice_agent.voice_pipeline import (
     VoiceSession,
     build_pipeline,
     create_context,
-    create_openai_services,
+    create_voice_services,
     energy_tool_schemas,
     validate_tool_arguments,
 )
@@ -153,7 +154,7 @@ def test_openai_switch_does_not_enable_voice_pipeline(monkeypatch):
 
 
 def test_openai_services_are_configured_through_settings_without_network():
-    services = create_openai_services(voice_settings())
+    services = create_voice_services(voice_settings())
     assert services.llm._settings.model == "gpt-6-luna"
     assert services.llm._settings.system_instruction == SYSTEM_INSTRUCTIONS
     assert services.llm._settings.max_completion_tokens == 300
@@ -161,6 +162,44 @@ def test_openai_services_are_configured_through_settings_without_network():
     assert services.stt._settings.model == "gpt-transcribe"
     assert services.tts._settings.voice == "alloy"
     assert ("*", spoken_transform) in services.tts._text_transforms
+    assert type(services.tts).__name__ == "OpenAITTSService"
+
+
+def test_tts_provider_defaults_to_openai_and_reads_elevenlabs_settings(monkeypatch):
+    for name in ("VOICE_TTS_PROVIDER", "ELEVENLABS_API_KEY", "ELEVENLABS_MODEL", "ELEVENLABS_VOICE"):
+        monkeypatch.delenv(name, raising=False)
+    settings = VoicePipelineSettings.from_env()
+    assert settings.tts_provider == "openai"
+    assert settings.elevenlabs_model == "eleven_flash_v2_5"
+    assert settings.elevenlabs_voice == "JBFqnCBsd6RMkjVDRZzb"
+    monkeypatch.setenv("VOICE_TTS_PROVIDER", " ElevenLabs ")
+    monkeypatch.setenv("ELEVENLABS_VOICE", "")
+    settings = VoicePipelineSettings.from_env()
+    assert settings.tts_provider == "elevenlabs"
+    assert settings.elevenlabs_voice == "JBFqnCBsd6RMkjVDRZzb"
+    assert settings.tts_label == "elevenlabs/eleven_flash_v2_5/JBFqnCBsd6RMkjVDRZzb"
+
+
+def test_elevenlabs_tts_requires_its_own_key_and_a_known_provider():
+    with pytest.raises(VoiceBudgetExceeded, match="ElevenLabs") as missing:
+        replace(voice_settings(), tts_provider="elevenlabs").validate_for_real_use()
+    assert "not-a-real-key" not in str(missing.value)
+    replace(voice_settings(), tts_provider="elevenlabs", elevenlabs_api_key="not-a-real-key").validate_for_real_use()
+    with pytest.raises(VoiceBudgetExceeded, match="VOICE_TTS_PROVIDER"):
+        replace(voice_settings(), tts_provider="piper").validate_for_real_use()
+
+
+def test_elevenlabs_tts_is_configured_through_settings_without_network():
+    settings = replace(voice_settings(), tts_provider="elevenlabs", elevenlabs_api_key="not-a-real-key-eleven")
+    services = create_voice_services(settings)
+    assert type(services.tts).__name__ == "ElevenLabsTTSService"
+    assert services.tts._settings.model == "eleven_flash_v2_5"
+    assert services.tts._settings.voice == "JBFqnCBsd6RMkjVDRZzb"
+    assert services.tts._settings.language is not None
+    assert ("*", spoken_transform) in services.tts._text_transforms
+    # STT and LLM stay on OpenAI; the ElevenLabs key never leaves the TTS service.
+    assert services.llm._settings.model == "gpt-6-luna"
+    assert "not-a-real-key-eleven" not in settings.tts_label
 
 
 def test_voice_prompt_requires_tools_and_treats_results_as_data():

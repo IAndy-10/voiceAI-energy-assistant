@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_voice_runtime_is_isolated_and_pinned():
     requirements = (ROOT / "voice_agent" / "requirements-voice.txt").read_text(encoding="utf-8")
     dockerfile = (ROOT / "voice_agent" / "Dockerfile").read_text(encoding="utf-8")
-    assert "pipecat-ai[webrtc,silero,openai,runner]==1.14.0" in requirements
+    assert "pipecat-ai[webrtc,silero,openai,elevenlabs,runner]==1.14.0" in requirements
     for local_only in ("whisper", "piper", "ollama"):
         assert local_only not in requirements.split("pipecat-ai[")[1].split("]")[0]
     assert "python:3.12-slim" in dockerfile
@@ -77,3 +77,12 @@ def test_voice_profile_relays_media_through_loopback_turn_with_explicit_pipeline
     assert "TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}" in compose
     assert compose.count("VOICE_PIPELINE_ENABLED: ${VOICE_PIPELINE_ENABLED:-false}") == 2
     assert "VOICE_PIPECAT_URL: ${VOICE_PIPECAT_URL:-http://127.0.0.1:7860}" in compose
+
+
+def test_elevenlabs_settings_reach_only_the_voice_agent():
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    energy_api, voice_agent = compose.split("  voice-agent:", 1)
+    assert "ELEVENLABS_API_KEY" not in energy_api
+    assert "VOICE_TTS_PROVIDER: ${VOICE_TTS_PROVIDER:-openai}" in voice_agent
+    assert "ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}" in voice_agent
+    assert "ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_flash_v2_5}" in voice_agent
