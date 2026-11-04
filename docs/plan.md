@@ -24,12 +24,9 @@ Rama `feat/remote-voice-twilio` (2 commits, subida a `origin`, **sin PR todavía
 
 ### Pendientes para mañana
 
-1. **Proteger `/start` (decidido dejarlo para después).** `allowed_origins` de Pipecat es solo CORS:
-   un `curl` con la URL del túnel de `:7860` obtiene las credenciales TURN de Twilio sin token (uso
-   facturable). La cascada de pago ya está protegida por el grant de un solo uso de `energy-api`.
-   Idea: un endpoint en `energy-api` que valide el grant **sin consumirlo**, más un middleware en la app
-   del runner que lo exija en `POST /start` antes de entregar `iceConfig`. ~1–2 h. Mientras tanto, cerrar
-   los túneles cuando no se usen.
+1. ✅ **Proteger `/start`** (2026-11-04): `voice_agent/start_guard.py` exige un grant vigente
+   (`POST /voice/sessions/check`, sin consumirlo) antes de entregar `iceConfig`, y bloquea
+   `/api/offer` directo. Ver M04.9, "Seguridad del acceso público".
 2. Abrir el PR de `feat/remote-voice-twilio`.
 3. Presupuesto de voz: el ledger va en 2,40 de `VOICE_BUDGET_USD=3.00` (quedan 3 sesiones). Subirlo
    antes de la demo con el colega.
