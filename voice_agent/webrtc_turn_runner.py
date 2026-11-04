@@ -9,6 +9,8 @@ address, so the browser always relays through a TURN server:
   browser behind an HTTPS tunnel. Credentials renew before they expire.
 
 ``VOICE_ALLOWED_ORIGINS`` lists the dashboard origins allowed to open sessions.
+That is CORS only, so ``POST /start`` also requires an API-issued session grant
+(``voice_agent.start_guard``) before it returns any ICE server.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from urllib.parse import urlsplit
 
 from loguru import logger
 
+from voice_agent.start_guard import install_start_guard
 from voice_agent.turn_credentials import build_turn_ice_server
 from voice_agent.twilio_ice import IceServerRefresher, TwilioIceError, fetch_twilio_ice_servers
 from voice_agent.webrtc_runner import bot
@@ -194,6 +197,7 @@ if __name__ == "__main__":
             # Without TURN the bot offers only container addresses, which a macOS
             # browser cannot reach; start anyway so the failure is visible in the UI.
             logger.error(f"TURN not configured ({exc}); WebRTC media will likely fail on Docker Desktop")
+    install_start_guard()
     from pipecat.runner.run import main
 
     main()

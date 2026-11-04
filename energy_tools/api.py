@@ -169,6 +169,15 @@ def issue_voice_session(request: VoiceSessionRequest) -> dict[str, Any]:
     return {"session_token": grant.token, "mode": grant.mode, "expires_at": grant.expires_at}
 
 
+@app.post("/voice/sessions/check", dependencies=[Depends(require_data_token)])
+def check_voice_session(request: VoiceSessionValidation) -> dict[str, str]:
+    """Let the runner gate POST /start on a live grant; the bot consumes it later."""
+    mode = voice_sessions.check(request.session_token, request.mode)
+    if mode is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autorización de voz inválida o vencida")
+    return {"mode": mode}
+
+
 @app.post("/voice/sessions/validate", dependencies=[Depends(require_data_token)])
 def validate_voice_session(request: VoiceSessionValidation) -> dict[str, str]:
     mode = voice_sessions.consume(request.session_token, request.mode)

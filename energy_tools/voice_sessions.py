@@ -32,6 +32,15 @@ class VoiceSessionAuthority:
             self._grants[grant.token] = grant
         return grant
 
+    def check(self, token: str, mode: str) -> VoiceMode | None:
+        """Accept a live grant without consuming it (the runner's /start gate)."""
+        with self._lock:
+            self._purge()
+            grant = self._grants.get(token)
+        if grant is None or grant.mode != mode:
+            return None
+        return grant.mode
+
     def consume(self, token: str, mode: str) -> VoiceMode | None:
         with self._lock:
             self._purge()

@@ -26,3 +26,17 @@ def test_voice_session_authority_keeps_minimal_grants_available_without_ai_permi
     authority = VoiceSessionAuthority(ttl_seconds=15)
     grant = authority.issue("minimal", ai_allowed=False)
     assert authority.consume(grant.token, "minimal") == "minimal"
+
+
+def test_voice_session_check_does_not_consume_and_respects_mode_and_expiry():
+    authority = VoiceSessionAuthority(ttl_seconds=15)
+    grant = authority.issue("minimal", ai_allowed=False)
+    assert authority.check(grant.token, "minimal") == "minimal"
+    assert authority.check(grant.token, "minimal") == "minimal"
+    assert authority.check(grant.token, "ai") is None
+    assert authority.check("unknown", "minimal") is None
+    assert authority.consume(grant.token, "minimal") == "minimal"
+    assert authority.check(grant.token, "minimal") is None
+    expired = authority.issue("minimal", ai_allowed=False)
+    authority._grants[expired.token] = type(expired)(expired.token, expired.mode, 0)
+    assert authority.check(expired.token, "minimal") is None
