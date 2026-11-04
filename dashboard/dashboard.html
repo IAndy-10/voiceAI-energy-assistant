@@ -1505,6 +1505,16 @@ async function syncAssistant(){
   }
 }
 
+// The API keeps the snapshot in memory only. Ask directly; only when a request fails
+// and /health shows the API lost the snapshot (a restart), resync once and retry.
+async function withSnapshot(request){
+  var r=await request();
+  if(r.ok||r.status===401)return r;
+  var h=await fetch('/health',{cache:'no-store'}).then(function(x){return x.json();}).catch(function(){return null;});
+  if(!h||h.snapshot_loaded)return r;
+  if(!(await syncAssistant()))throw new Error('no hay datos sincronizados.');
+  return request();
+}
 async function askAssistant(ev){
   ev.preventDefault();
   var input=document.getElementById('assist-q');var q=input.value.trim();
@@ -1513,11 +1523,8 @@ async function askAssistant(ev){
   addAssistMsg('user',q);var reply=addAssistMsg('bot','Consultando…');
   var mode=document.getElementById('assist-mode').value;
   try{
-    // The API keeps the snapshot in memory only; resend it if the API restarted.
-    var h=await fetch('/health',{cache:'no-store'}).then(function(x){return x.json();});
-    if(!h.snapshot_loaded&&!(await syncAssistant()))throw new Error('no hay datos sincronizados.');
-    var r=await fetch(mode==='openai'?'/agent/chat':'/agent/local-chat',
-      {method:'POST',headers:assistHeaders(true),body:JSON.stringify({question:q})});
+    var r=await withSnapshot(function(){return fetch(mode==='openai'?'/agent/chat':'/agent/local-chat',
+      {method:'POST',headers:assistHeaders(true),body:JSON.stringify({question:q})});});
     var d=await r.json().catch(function(){return null;});
     if(r.status===401){setAssistToken(null);showAssistToken('Token rechazado. Ingréselo de nuevo.');}
     if(!r.ok)throw new Error(assistErr(d,'HTTP '+r.status));
@@ -1594,9 +1601,7 @@ async function startVoice(){
   var why=voiceBlocker();if(why){voiceState(why);return;}
   voice.notice='';voiceState('Conectando…');
   try{
-    var h=await fetch('/health',{cache:'no-store'}).then(function(x){return x.json();});
-    if(!h.snapshot_loaded&&!(await syncAssistant()))throw new Error('no hay datos sincronizados.');
-    var gr=await fetch('/voice/sessions',{method:'POST',headers:assistHeaders(true),body:JSON.stringify({mode:'ai'})});
+    var gr=await withSnapshot(function(){return fetch('/voice/sessions',{method:'POST',headers:assistHeaders(true),body:JSON.stringify({mode:'ai'})});});
     var grant=await gr.json().catch(function(){return null;});
     if(gr.status===401){setAssistToken(null);showAssistToken('Token rechazado. Ingréselo de nuevo.');return;}
     if(!gr.ok)throw new Error(assistErr(grant,'la sesión de voz fue rechazada.'));
