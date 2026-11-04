@@ -9,12 +9,12 @@ La contribución Vesta no reemplaza el dashboard ni sus cálculos: el backend co
 ```mermaid
 flowchart LR
     excel[Excel privados\nDatos/ · fuera de Git] --> dashboard[Dashboard original\ndashboard/dashboard.html]
-    dashboard --> snapshot[Snapshot JSON\nvalidado en memoria]
+    dashboard -- panel 💬 en /app --> snapshot[Snapshot JSON\nvalidado en memoria]
     snapshot --> api[FastAPI Energy API]
-    api --> tools[6 Energy Tools\ndeterministas]
-    api --> demo[Vesta /demo\n4 pestañas]
-    demo --> local[Consultas locales]
-    demo -. opcional .-> text[Agente textual OpenAI]
+    api --> tools[8 Energy Tools\ndeterministas]
+    api --> app[Dashboard en /app\npanel 💬 y 🎙]
+    app --> local[Consultas locales]
+    app -. opcional .-> text[Agente textual OpenAI]
     voice[Pipecat 1.14.0\nSmallWebRTC] --> adapter[Adaptador HTTP autenticado]
     adapter --> api
     voice -. pipeline opcional .-> stt[STT → LLM → Tools → TTS]
@@ -24,10 +24,11 @@ flowchart LR
 
 Componentes principales:
 
-- **Dashboard original**: procesa los cinco Excel locales y exporta el contrato de snapshot. Sigue siendo propietario de sus cálculos.
+- **Dashboard original**: procesa los cinco Excel locales en el navegador y arma el snapshot. Sigue siendo propietario de sus cálculos.
+- **`/app`**: el mismo dashboard servido por la API. Su panel **💬 Asistente** pide el token, envía el snapshot a la API y ofrece chat (local u OpenAI) y voz (🎙). Funciona también en el celular.
 - **FastAPI Energy API**: mantiene un único snapshot validado en memoria y protege las consultas con Bearer.
-- **Ocho Energy Tools**: `get_overview`, `get_store`, `rank_stores`, `get_solar`, `get_chiller`, `get_equipment`, `get_indicators` y `get_data_info` son la fuente autorizada de métricas energéticas.
-- **Vesta `/demo`**: ofrece Datos y accesos, Indicadores, Asistente IA y Asistente de voz.
+- **Ocho Energy Tools**: `get_overview`, `get_store`, `rank_stores`, `get_solar`, `get_chiller`, `get_equipment`, `get_indicators` y `get_data_info` son la fuente autorizada de métricas energéticas. Su nombre, descripción y argumentos se definen una sola vez en `energy_contracts/`, que comparten la API, el agente textual y el de voz.
+- **Vesta `/demo`**: página de pruebas con Datos y accesos, Indicadores, Asistente IA y Asistente de voz; carga un snapshot JSON (por ejemplo, el sintético).
 - **Agente textual**: OpenAI es opcional y conserva allowlist, límites, `store=false` y ledger de uso.
 - **Voz**: Pipecat 1.14.0 orquesta SmallWebRTC y, cuando se habilita explícitamente, la cascada STT → LLM → Energy Tools → TTS.
 
@@ -36,7 +37,7 @@ Componentes principales:
 | Hito | Estado | Alcance |
 | --- | --- | --- |
 | M03.7 | Implementado y validado | Chat energético local/OpenAI opcional, snapshots, autenticación, presupuestos y demo. |
-| M04.1 | Implementado | Adaptador HTTP autenticado hacia las seis Energy Tools. |
+| M04.1 | Implementado | Adaptador HTTP autenticado hacia las Energy Tools (hoy ocho). |
 | M04.2 | Implementado y validado en smoke tests | Entorno Pipecat 1.14.0, cliente SmallWebRTC y pruebas de transporte. |
 | M04.3 | Implementado; conexión manual validada | Cuarta pestaña y conexión SmallWebRTC local en Windows. |
 | M04.4 | Implementado y cubierto por pruebas | Pipeline opcional STT → LLM → Tools → TTS, allowlist y presupuesto persistente. |
@@ -44,6 +45,9 @@ Componentes principales:
 | M04.6 | Implementado y cubierto por pruebas | Runner Pipecat persistente, autorización efímera por sesión y controles de IA textual/voz independientes. |
 | M04.7 | Cerrado con decisión de plataforma | Windows usa Pipecat nativo; macOS conserva el flujo Docker de Ítalo; Linux + Docker queda pendiente de una validación WebRTC real. |
 | M04.8 | Implementado; validado en macOS | TTS intercambiable (OpenAI por defecto o ElevenLabs Flash v2.5) y resumen de latencia por servicio. |
+| M04.9 | Implementado; validado desde un celular | Voz remota con Cloudflare Tunnel y TURN de Twilio; `/start` exige la autorización de sesión. |
+
+**El demo está completo.** Lo que sigue es probarlo con usuarios y reunir feedback; ver [Pruebas y feedback](#pruebas-y-feedback).
 
 ## Requisitos
 
@@ -63,10 +67,12 @@ Componentes principales:
    docker compose up -d --build
    ```
 
-4. Abra el [dashboard original](http://127.0.0.1:8766/dashboard.html) y la [demo Vesta](http://127.0.0.1:8000/demo).
-5. En **Datos y accesos**, ingrese el Bearer, elija el JSON exportado por el dashboard y pulse **Cargar snapshot**. Para una prueba segura use `Datos\vesta_snapshot_sintetico.json`.
+4. Abra [`/app`](http://127.0.0.1:8000/app), arrastre los cinco `.xlsx` y pulse **💬 Asistente**.
+5. Ingrese el Bearer. El panel envía el snapshot a la API y queda listo para preguntar. Para voz, inicie también el perfil `voice` (`docker compose --profile voice up -d --build`) y use 🎙.
 
-El snapshot vive solo en memoria. Tras recrear `energy-api` debe cargarse otra vez. El volumen `agent-usage` conserva solo contadores agregados del agente textual; `voice-usage` cumple la misma función para el contenedor de voz.
+El snapshot vive solo en memoria. Si la API se reinicia, el panel lo vuelve a enviar solo en la siguiente pregunta; al recrear `energy-api` también basta con preguntar de nuevo.
+
+Alternativas: el [dashboard sin asistente](http://127.0.0.1:8766/dashboard.html) en `:8766`, y la [demo Vesta](http://127.0.0.1:8000/demo), que carga un snapshot JSON en **Datos y accesos** (para una prueba segura, `Datos\vesta_snapshot_sintetico.json`). El dashboard ya no tiene botón de descarga del snapshot; para validar uno real con `scripts/validate_real_snapshot.py`, ejecute `copy(JSON.stringify(buildSnapshot()))` en la consola del navegador con los `.xlsx` cargados y guarde el contenido como `agent_snapshot.json` (queda ignorado por Git). El volumen `agent-usage` conserva solo contadores agregados del agente textual; `voice-usage` cumple la misma función para el contenedor de voz.
 
 ## Modos de consulta
 
@@ -161,7 +167,7 @@ STT → LLM → ocho Energy Tools → TTS
 - **Futuro, no implementado**: Ollama con Qwen para español y Gemma para inglés como LLM local.
 - **Futuro, no implementado**: Piper como TTS local.
 - **Futuro, no implementado**: STT local, a elegir según compatibilidad con Pipecat.
-- **Futuro, fuera de este PR**: Twilio como canal telefónico.
+- **Futuro, no implementado**: Twilio Voice como canal telefónico (hoy Twilio se usa solo como TURN para la voz remota).
 
 ### TTS con ElevenLabs
 
@@ -212,17 +218,16 @@ Las pruebas usan dobles/mocks para OpenAI y ElevenLabs y no consumen tokens ni c
 
 - SmallWebRTC/Pipecat funciona con el runner local de Windows; la conexión desde la cuarta pestaña fue validada manualmente.
 - Docker Desktop Windows no ofrece una ruta WebRTC directa validada; use el runner nativo. Un `HTTP 200` de señalización no equivale a audio conectado.
-- macOS conserva el flujo Docker de Ítalo para validación independiente. Linux + Docker Compose sigue pendiente de una prueba ICE y audio real.
-- La conversación completa con proveedores reales todavía está pendiente de validación extremo a extremo.
+- En macOS, el flujo Docker (`voice-agent` + `turn-local`) está validado de punta a punta con proveedores reales, también desde un celular por túnel y TURN de Twilio. Linux + Docker Compose sigue pendiente de una prueba ICE y audio real.
 - `VOICE_PIPELINE_ENABLED=false` es el valor inicial y no realiza llamadas externas.
-- Que el runner figure disponible o devuelva `HTTP 200` no prueba una conexión ICE; Docker Desktop sigue pendiente de validación manual desde Chrome.
+- Que el runner figure disponible o devuelva `HTTP 200` no prueba una conexión ICE.
 - `VOICE_PROVIDER=openai_direct`, Ollama, Piper, STT local y Twilio como canal telefónico no están implementados. Twilio sí se usa como TURN para la voz remota.
 
 ## Colaboración y Pull Requests
 
 El dashboard y su especificación original se preservan. Los desarrollos de Vesta se realizan en ramas `feature/*` y se integran mediante Pull Requests revisables hacia el repositorio original de [Ítalo](https://github.com/IAndy-10/voiceAI-energy-assistant). No se integran datos privados, secretos ni artefactos de ejecución en esas revisiones.
 
-Resumen sugerido para revisión: validar el contrato de snapshot y las seis Energy Tools, ejecutar la demo sin proveedores, revisar el adaptador HTTP de voz y acordar la estrategia ICE/TURN y proveedores locales antes de habilitar conversaciones cloud.
+Resumen sugerido para revisión: validar el contrato de snapshot y las ocho Energy Tools, ejecutar la demo sin proveedores, revisar el adaptador HTTP de voz y acordar la estrategia ICE/TURN y proveedores locales antes de habilitar conversaciones cloud.
 
 ## Documentación relacionada
 
@@ -238,3 +243,14 @@ Resumen sugerido para revisión: validar el contrato de snapshot y las seis Ener
 - [Diagnóstico y decisión Windows M04.7](docs/M04.7-WEBRTC-WINDOWS-DIAGNOSIS.md)
 - [TTS con ElevenLabs y latencia M04.8](docs/M04.8-ELEVENLABS-TTS.md)
 - [Especificación original de demostración](docs/multicentro_energy_manager_demo_spec.md)
+
+## Pruebas y feedback
+
+El demo está cerrado en funcionalidades. Para probarlo con otra persona:
+
+1. Levante el stack con voz y, si la persona está en otra red, los túneles (ver [Voz remota](#voz-remota-cloudflare-tunnel--twilio-turn)).
+2. Envíe la URL de `/app` y el token por canales separados. Use un token nuevo solo para la prueba y rótelo al terminar.
+3. Revise antes el presupuesto de voz (`VOICE_BUDGET_USD`; cada sesión reserva `VOICE_SESSION_BUDGET_USD` completo) y después la latencia con `scripts/voice_latency.py`.
+4. Anote para cada pregunta: qué se preguntó, si la cifra y el período fueron correctos, si la voz cortó la pregunta, la demora percibida y cualquier problema de interfaz (en especial en el celular).
+
+Pendientes conocidos: repetir la prueba remota desde un celular con la protección de `/start`, una sesión de voz en Windows con `start-voice-windows.ps1`, y ajustar el silencio de fin de turno si el STT corta preguntas con pausas.

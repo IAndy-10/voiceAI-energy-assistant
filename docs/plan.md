@@ -1,37 +1,42 @@
 # Plan — Voz remota para un colega (túnel + Twilio TURN)
 
-Actualizado: 2026-11-03 (noche). El plan anterior (modelo local y voz, 28–29 oct.) está en
+Actualizado: 2026-11-04. El plan anterior (modelo local y voz, 28–29 oct.) está en
 `docs/plan-2026-10-voz-local.md` como registro.
 
-## Estado al 2026-11-03 — para retomar
+## Estado al 2026-11-04 — demo cerrado
 
-Rama `feat/remote-voice-twilio` (2 commits, subida a `origin`, **sin PR todavía**).
+**El demo está completo.** Lo que sigue es probarlo con usuarios y reunir feedback (ver README,
+"Pruebas y feedback").
+
+- **PR #9 (fusionado):** voz remota con Cloudflare Tunnel y TURN de Twilio (`VOICE_TURN_MODE`,
+  `VOICE_ALLOWED_ORIGINS`, credenciales que se renuevan solas) y `/start` protegido por el grant de
+  sesión (`voice_agent/start_guard.py`). Validado desde un celular con datos móviles.
+- **PR #10 (fusionado):** limpieza tras una auditoría. Se borraron el experimento WebRTC/coturn
+  anterior, `voice_agent/server.py` y el botón "⟳ Sincronizar"; `tools.py` quedó sin repetición; las 8
+  herramientas se definen una vez en `energy_contracts/`, y el panel ya no consulta `/health` antes de
+  cada pregunta.
+- **Rama `fix/mobile-assistant-panel`:** el panel 💬 usa la altura visible del celular (los botones
+  ya no quedan bajo la barra del navegador) y se quitó el botón "⬇ Descargar snapshot".
+- Ledger de voz reiniciado el 2026-11-04: `VOICE_BUDGET_USD=3.00` alcanza para 15 sesiones de 0,20 USD.
+
+### Pendientes
+
+1. Repetir la prueba remota desde un celular con la protección de `/start` (solo se probó en local).
+2. Una sesión de voz en Windows con `scripts/start-voice-windows.ps1`: ese runner ahora también exige
+   el grant en `/start`.
+3. Fase 4: prueba con el colega y feedback. Revisar después `scripts/voice_latency.py` y el ledger.
+4. Opcional: ajustar el silencio de fin de turno (el STT cortó una pregunta con pausa), pasar los 48
+   `toFixed()` del dashboard al formato chileno y evaluar STT en streaming para bajar la latencia
+   (STT ~1,1 s es el tramo más lento).
+
+### Historial de la voz remota (fases 1–3)
 
 - **Fase 1 ✅** Cuenta de Twilio; `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` en `.env`.
 - **Fase 2 ✅** Probada desde el celular con datos móviles: ICE `completed` con candidatos `relay` de
   Twilio, `get_overview` correcto y audio con TTS OpenAI y ElevenLabs. TTFB mediano: STT ~1,1 s,
   LLM ~0,7–1,3 s, TTS ElevenLabs ~0,2 s (OpenAI ~1,3 s).
-- **Fase 3 ✅** (salvo el pendiente de abajo):
-  - `voice_agent/twilio_ice.py`: pide ICE a Twilio, normaliza para Pipecat (quita `url`, TURN UDP
-    primero) y renueva al 80 % del TTL sin reiniciar (enganches a `_parse_ice_servers` y
-    `SmallWebRTCRequestHandler.update_ice_servers`).
-  - `VOICE_TURN_MODE=local|twilio` y `VOICE_ALLOWED_ORIGINS` (lista vacía = error, porque Pipecat la
-    trata como "todos los orígenes"). Sin `--allowed-origins` en `compose.yaml`.
-  - Tests: 93 en la imagen `voice-agent` y 58 en la de `energy-api`, todos pasan. Docs:
-    `docs/M04.9-REMOTE-VOICE.md`, README y `.env.example`.
-  - Probado con Twilio real en modo `twilio`: credenciales listas, `/start` entrega los 4 ICE.
-- **Fase 4 ⏳** Prueba con el colega.
-
-### Pendientes para mañana
-
-1. ✅ **Proteger `/start`** (2026-11-04): `voice_agent/start_guard.py` exige un grant vigente
-   (`POST /voice/sessions/check`, sin consumirlo) antes de entregar `iceConfig`, y bloquea
-   `/api/offer` directo. Ver M04.9, "Seguridad del acceso público".
-2. Abrir el PR de `feat/remote-voice-twilio`.
-3. Presupuesto de voz: el ledger va en 2,40 de `VOICE_BUDGET_USD=3.00` (quedan 3 sesiones). Subirlo
-   antes de la demo con el colega.
-4. Opcional: túnel con nombre (URL fija). Ajustar el tiempo de silencio del fin de turno: el STT cortó
-   una pregunta en dos con una pausa.
+- **Fase 3 ✅** `voice_agent/twilio_ice.py` (ICE de Twilio normalizado para Pipecat y renovado al
+  80 % del TTL), `VOICE_TURN_MODE` y `VOICE_ALLOWED_ORIGINS`, y la protección de `/start`.
 
 ### Cómo levantar la demo remota (resumen de M04.9)
 
@@ -40,6 +45,10 @@ Rama `feat/remote-voice-twilio` (2 commits, subida a `origin`, **sin PR todavía
    y `VOICE_PIPECAT_URL` = URL del túnel de `:7860`.
 3. `docker compose --profile voice up -d --build`. Recargar los `.xlsx` (el snapshot vive en memoria).
 4. Al terminar: Ctrl+C en los túneles y volver `.env` a los valores locales.
+
+---
+
+*Lo que sigue es el plan original del 2026-11-03, conservado como registro.*
 
 ## Qué cambió desde el plan anterior
 
@@ -52,8 +61,8 @@ Rama `feat/remote-voice-twilio` (2 commits, subida a `origin`, **sin PR todavía
 
 ## Qué falta
 
-- **Voz fuera de `127.0.0.1`.** Hoy solo funciona en el mismo Mac: el navegador llega al runner
-  por `127.0.0.1:7860` y al TURN por `127.0.0.1:3478`.
+- ✅ **Voz fuera de `127.0.0.1`** (resuelto con el PR #9). Antes solo funcionaba en el mismo Mac: el
+  navegador llegaba al runner por `127.0.0.1:7860` y al TURN por `127.0.0.1:3478`.
 - Pospuesto: modelo local con Ollama (parte 1 del plan anterior).
 
 ## Qué sigue: voz remota
