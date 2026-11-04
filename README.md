@@ -26,7 +26,7 @@ Componentes principales:
 
 - **Dashboard original**: procesa los cinco Excel locales y exporta el contrato de snapshot. Sigue siendo propietario de sus cálculos.
 - **FastAPI Energy API**: mantiene un único snapshot validado en memoria y protege las consultas con Bearer.
-- **Seis Energy Tools**: `get_overview`, `get_store`, `rank_stores`, `get_solar`, `get_chiller` y `get_data_info` son la fuente autorizada de métricas energéticas.
+- **Ocho Energy Tools**: `get_overview`, `get_store`, `rank_stores`, `get_solar`, `get_chiller`, `get_equipment`, `get_indicators` y `get_data_info` son la fuente autorizada de métricas energéticas.
 - **Vesta `/demo`**: ofrece Datos y accesos, Indicadores, Asistente IA y Asistente de voz.
 - **Agente textual**: OpenAI es opcional y conserva allowlist, límites, `store=false` y ledger de uso.
 - **Voz**: Pipecat 1.14.0 orquesta SmallWebRTC y, cuando se habilita explícitamente, la cascada STT → LLM → Energy Tools → TTS.
@@ -43,6 +43,7 @@ Componentes principales:
 | M04.5 | Preparado para validación manual | Procedimiento controlado para una primera conversación. No se declara completado hasta obtener evidencia real extremo a extremo. |
 | M04.6 | Implementado y cubierto por pruebas | Runner Pipecat persistente, autorización efímera por sesión y controles de IA textual/voz independientes. |
 | M04.7 | Cerrado con decisión de plataforma | Windows usa Pipecat nativo; macOS conserva el flujo Docker de Ítalo; Linux + Docker queda pendiente de una validación WebRTC real. |
+| M04.8 | Implementado; validado en macOS | TTS intercambiable (OpenAI por defecto o ElevenLabs Flash v2.5) y resumen de latencia por servicio. |
 
 ## Requisitos
 
@@ -136,6 +137,7 @@ La pantalla distingue **Runner disponible** (sonda HTTP), **Conectando**, **Cone
 | Agente textual | `OPENAI_ENABLED`, `OPENAI_API_KEY`, `OPENAI_MODEL`, presupuesto, límites de consultas, tokens y rondas de tools |
 | Transporte de voz | `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_PIPECAT_URL`, límites de sesión y grabación |
 | Pipeline de voz | `VOICE_PIPELINE_ENABLED`, `VOICE_STT_MODEL`, `VOICE_LLM_MODEL`, `VOICE_TTS_MODEL`, `VOICE_TTS_VOICE`, límites de turnos y presupuesto |
+| TTS de voz | `VOICE_TTS_PROVIDER` (`openai` por defecto o `elevenlabs`), `ELEVENLABS_API_KEY`, `ELEVENLABS_MODEL`, `ELEVENLABS_VOICE` |
 
 El runner Windows toma `VOICE_ENERGY_API_BASE_URL` y sus datos de escucha desde `.env.windows.local` (o sus valores locales seguros) y el resto desde `.env`. Las variables heredadas de PowerShell no tienen precedencia: el lanzador reemplaza sus variables administradas durante la ejecución y las restaura al detenerse. Los conflictos entre ambos archivos y cualquier secreto en el archivo Windows se rechazan. Compose configura el equivalente interno para `voice-agent`; no expone esos valores al navegador. `.env` se lee al inicio: al cambiarlo, reinicie el runner Windows y recree solo el servicio Docker afectado. No es sincronización en tiempo real.
 
@@ -151,14 +153,39 @@ El runner Windows toma `VOICE_ENERGY_API_BASE_URL` y sus datos de escucha desde 
 La arquitectura prevista mantiene responsabilidades separadas:
 
 ```text
-STT → LLM → seis Energy Tools → TTS
+STT → LLM → ocho Energy Tools → TTS
 ```
 
 - **Actual y opcional**: OpenAI para STT, LLM y TTS dentro de Pipecat.
+- **Actual y opcional**: ElevenLabs como TTS (ver [TTS con ElevenLabs](#tts-con-elevenlabs)).
 - **Futuro, no implementado**: Ollama con Qwen para español y Gemma para inglés como LLM local.
 - **Futuro, no implementado**: Piper como TTS local.
 - **Futuro, no implementado**: STT local, a elegir según compatibilidad con Pipecat.
 - **Futuro, fuera de este PR**: Twilio como canal telefónico.
+
+### TTS con ElevenLabs
+
+El TTS usa OpenAI por defecto. Para usar ElevenLabs (streaming por WebSocket; en macOS bajó el primer audio de ~1,0 s a ~0,23 s, ver [M04.8](docs/M04.8-ELEVENLABS-TTS.md)):
+
+1. Cree una API key en https://elevenlabs.io/app/settings/api-keys con permiso de text-to-speech.
+2. En `.env`, defina `VOICE_TTS_PROVIDER=elevenlabs` y `ELEVENLABS_API_KEY=...`.
+3. Recree el runner: `docker compose --profile voice up -d --build --force-recreate voice-agent` (en Windows, reinstale `voice_agent/requirements-voice.txt` en `.venv` y reinicie el lanzador). El log muestra `tts=elevenlabs/eleven_flash_v2_5/<voz>`.
+
+- La voz por defecto es George (`JBFqnCBsd6RMkjVDRZzb`), una voz prediseñada que funciona en el plan gratuito pero habla español con acento inglés. Para otra voz, use `ELEVENLABS_VOICE` con un voice ID; las voces de la Voice Library requieren un plan pagado.
+- STT y LLM siguen en OpenAI. ElevenLabs no acepta instrucciones de estilo, así que el tono depende de la voz.
+- ElevenLabs cobra créditos de su plan; el presupuesto local de voz (`VOICE_SESSION_BUDGET_USD`) no los controla. El límite real es la cuota del plan.
+- Con ElevenLabs activo, el texto de las respuestas habladas (cifras agregadas) también se envía a ElevenLabs.
+- Si ElevenLabs rechaza la solicitud (voz inexistente, voz de pago en plan gratuito), Pipecat solo registra `TTS context ... completed with no audio` y no muestra el error real. Vacíe `ELEVENLABS_VOICE` para volver a la voz por defecto.
+
+### Latencia
+
+El runner activa las métricas de Pipecat, que registran el tiempo al primer byte (TTFB) de cada servicio. Para resumirlas después de una o más sesiones:
+
+```bash
+docker compose logs --since 30m voice-agent | python scripts/voice_latency.py
+```
+
+El resumen muestra n, mediana, p90 y rango por servicio (`OpenAISTTService`, `OpenAILLMService`, `OpenAITTSService` o `ElevenLabsTTSService`). Compare proveedores con varias preguntas parecidas en cada uno.
 
 ## Pruebas
 
@@ -168,7 +195,7 @@ STT → LLM → seis Energy Tools → TTS
 docker compose run --rm --no-deps voice-agent python -m voice_agent.smoke_test
 ```
 
-Las pruebas usan dobles/mocks para OpenAI y no consumen tokens. La conversación real STT → LLM → Tools → TTS se ejecuta solo cuando una persona la habilita manualmente y debe probarse primero con el snapshot sintético.
+Las pruebas usan dobles/mocks para OpenAI y ElevenLabs y no consumen tokens ni créditos. La conversación real STT → LLM → Tools → TTS se ejecuta solo cuando una persona la habilita manualmente y debe probarse primero con el snapshot sintético.
 
 ## Limitaciones conocidas
 
@@ -197,4 +224,5 @@ Resumen sugerido para revisión: validar el contrato de snapshot y las seis Ener
 - [Pipeline Energy Tools M04.4](docs/M04.4-PIPECAT-ENERGY-PIPELINE.md)
 - [Primera conversación controlada M04.5](docs/M04.5-FIRST-VOICE-TEST.md)
 - [Diagnóstico y decisión Windows M04.7](docs/M04.7-WEBRTC-WINDOWS-DIAGNOSIS.md)
+- [TTS con ElevenLabs y latencia M04.8](docs/M04.8-ELEVENLABS-TTS.md)
 - [Especificación original de demostración](docs/multicentro_energy_manager_demo_spec.md)

@@ -1,6 +1,7 @@
 # Isolated runtime for the browser voice agent. Do not add to energy-api.
-# STT, LLM and TTS all use OpenAI with the same key as the AI assistant tab;
+# STT and LLM use OpenAI with the same key as the AI assistant tab; TTS uses
+# OpenAI by default or ElevenLabs (VOICE_TTS_PROVIDER=elevenlabs);
 # silero runs voice-activity detection locally.
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30,<1.0
-pipecat-ai[webrtc,silero,openai,runner]==1.14.0
+pipecat-ai[webrtc,silero,openai,elevenlabs,runner]==1.14.0

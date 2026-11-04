@@ -13,6 +13,8 @@ def test_windows_launcher_keeps_secrets_in_central_env_only():
     assert "Invoke-Expression" not in script
     assert "VOICE_ENERGY_API_TOKEN" not in template
     assert "OPENAI_API_KEY" not in template
+    assert "ELEVENLABS_API_KEY" not in template
+    assert "-Name 'ELEVENLABS_API_KEY'" in script
     assert "VOICE_PIPELINE_ENABLED" not in template
     assert "ENERGY_TOOLS_API_TOKEN" in script
     assert "VOICE_ENERGY_API_TOKEN" in script

@@ -84,6 +84,11 @@ services:
       VOICE_LLM_MAX_TOKENS: ${VOICE_LLM_MAX_TOKENS:-300}
       VOICE_TTS_MODEL: ${VOICE_TTS_MODEL:-gpt-4o-mini-tts}
       VOICE_TTS_VOICE: ${VOICE_TTS_VOICE:-alloy}
+      # TTS provider: openai (default) or elevenlabs. The ElevenLabs key goes to this service only.
+      VOICE_TTS_PROVIDER: ${VOICE_TTS_PROVIDER:-openai}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_flash_v2_5}
+      ELEVENLABS_VOICE: ${ELEVENLABS_VOICE:-}
       VOICE_MAX_TURNS: ${VOICE_MAX_TURNS:-8}
       VOICE_TOOL_TIMEOUT_SECONDS: ${VOICE_TOOL_TIMEOUT_SECONDS:-10}
       VOICE_SESSION_BUDGET_USD: ${VOICE_SESSION_BUDGET_USD:-0.20}

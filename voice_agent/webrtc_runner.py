@@ -63,7 +63,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
             session = VoiceSession(VoiceEnergyAdapter(EnergyAPISettings.from_env()), settings.max_turns)
             context = create_context()
             pipeline = build_pipeline(transport, session, settings, context=context)
-            logger.info(f"voice_pipeline_started stt={settings.stt_model} llm={settings.llm_model} tts={settings.tts_model}")
+            logger.info(f"voice_pipeline_started stt={settings.stt_model} llm={settings.llm_model} tts={settings.tts_label}")
         except VoiceBudgetExceeded as exc:
             logger.warning("voice_pipeline_not_started reason=budget_or_configuration")
             unavailable_reason = str(exc)

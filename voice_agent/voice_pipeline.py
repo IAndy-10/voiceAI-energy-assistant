@@ -54,6 +54,12 @@ STT_PROMPT = "Multicentro, Vesta, kWh, megawatts hora, chiller, Portal Centro Ta
 
 TTS_INSTRUCTIONS = "Habla en español de Chile, con tono profesional, cálido y ritmo natural."
 
+TTS_PROVIDERS = ("openai", "elevenlabs")
+# Flash v2.5 is ElevenLabs' lowest-latency multilingual model; George is a premade
+# voice, so it works on the free plan (Voice Library voices need a paid plan).
+DEFAULT_ELEVENLABS_MODEL = "eleven_flash_v2_5"
+DEFAULT_ELEVENLABS_VOICE = "JBFqnCBsd6RMkjVDRZzb"
+
 
 @dataclass(frozen=True)
 class VoicePipelineSettings:
@@ -72,6 +78,17 @@ class VoicePipelineSettings:
     usage_file: str
     llm_max_tokens: int = 300
     session_max_seconds: float = 300
+    tts_provider: str = "openai"
+    elevenlabs_api_key: str | None = None
+    elevenlabs_model: str = DEFAULT_ELEVENLABS_MODEL
+    elevenlabs_voice: str = DEFAULT_ELEVENLABS_VOICE
+
+    @property
+    def tts_label(self) -> str:
+        """Provider, model and voice for logs; never includes a key."""
+        if self.tts_provider == "elevenlabs":
+            return f"elevenlabs/{self.elevenlabs_model}/{self.elevenlabs_voice}"
+        return f"{self.tts_provider}/{self.tts_model}/{self.tts_voice}"
 
     @classmethod
     def from_env(cls) -> "VoicePipelineSettings":
@@ -96,6 +113,10 @@ class VoicePipelineSettings:
             usage_file=os.getenv("VOICE_USAGE_FILE", "data/voice-usage.json"),
             llm_max_tokens=integer("VOICE_LLM_MAX_TOKENS", 300),
             session_max_seconds=integer("VOICE_SESSION_MAX_SECONDS", 300),
+            tts_provider=(os.getenv("VOICE_TTS_PROVIDER") or "openai").strip().lower(),
+            elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY") or None,
+            elevenlabs_model=os.getenv("ELEVENLABS_MODEL") or DEFAULT_ELEVENLABS_MODEL,
+            elevenlabs_voice=os.getenv("ELEVENLABS_VOICE") or DEFAULT_ELEVENLABS_VOICE,
         )
 
     def validate_for_real_use(self) -> None:
@@ -103,6 +124,10 @@ class VoicePipelineSettings:
             raise VoiceBudgetExceeded("El pipeline de voz está desactivado por configuración local.")
         if not self.api_key:
             raise VoiceBudgetExceeded("No hay una clave API configurada para el pipeline de voz.")
+        if self.tts_provider not in TTS_PROVIDERS:
+            raise VoiceBudgetExceeded("VOICE_TTS_PROVIDER debe ser openai o elevenlabs.")
+        if self.tts_provider == "elevenlabs" and not self.elevenlabs_api_key:
+            raise VoiceBudgetExceeded("No hay una clave de ElevenLabs configurada para la voz.")
         if self.session_budget_usd <= 0 or self.budget_usd <= 0 or self.session_budget_usd > self.budget_usd:
             raise VoiceBudgetExceeded("La reserva de voz no permite proteger el presupuesto.")
 
@@ -201,9 +226,37 @@ class VoiceServices:
     tts: Any
 
 
-def create_openai_services(settings: VoicePipelineSettings) -> VoiceServices:
+def create_tts(settings: VoicePipelineSettings) -> Any:
+    """OpenAI TTS by default; ElevenLabs (WebSocket streaming) when selected.
+
+    The ElevenLabs SDK is imported only when used.  ElevenLabs takes no style
+    instructions, so the voice itself sets the tone.
+    """
+    # Safety net: units and symbols the model copies are spoken as words.
+    text_transforms = [("*", spoken_transform)]
+    if settings.tts_provider == "elevenlabs":
+        from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+
+        return ElevenLabsTTSService(
+            api_key=settings.elevenlabs_api_key,
+            settings=ElevenLabsTTSService.Settings(
+                model=settings.elevenlabs_model, voice=settings.elevenlabs_voice, language=Language.ES,
+            ),
+            text_transforms=text_transforms,
+        )
+    return OpenAITTSService(
+        api_key=settings.api_key,
+        settings=OpenAITTSService.Settings(
+            model=settings.tts_model, voice=settings.tts_voice, instructions=TTS_INSTRUCTIONS,
+        ),
+        text_transforms=text_transforms,
+    )
+
+
+def create_voice_services(settings: VoicePipelineSettings) -> VoiceServices:
     """Create v1.14 services only after the guard has accepted a real session.
 
+    STT and LLM use OpenAI; the TTS provider follows ``VOICE_TTS_PROVIDER``.
     Configured through ``Service.Settings(...)``: the constructor arguments
     ``model=``, ``voice=`` and ``language=`` are deprecated in 1.14.
     """
@@ -223,14 +276,7 @@ def create_openai_services(settings: VoicePipelineSettings) -> VoiceServices:
                 extra={"reasoning_effort": "none"} if settings.llm_model == "gpt-6-luna" else {},
             ),
         ),
-        tts=OpenAITTSService(
-            api_key=settings.api_key,
-            settings=OpenAITTSService.Settings(
-                model=settings.tts_model, voice=settings.tts_voice, instructions=TTS_INSTRUCTIONS,
-            ),
-            # Safety net: units and symbols the model copies are spoken as words.
-            text_transforms=[("*", spoken_transform)],
-        ),
+        tts=create_tts(settings),
     )
 
 
@@ -242,7 +288,7 @@ def create_context() -> LLMContext:
 def build_pipeline(transport: BaseTransport, session: VoiceSession, settings: VoicePipelineSettings,
                    services: VoiceServices | None = None, context: LLMContext | None = None) -> Pipeline:
     """Build the tested cascade; service construction does not perform network I/O."""
-    services = services or create_openai_services(settings)
+    services = services or create_voice_services(settings)
     context = context or create_context()
     for schema in energy_tool_schemas().standard_tools:
         services.llm.register_function(schema.name, session.handle_tool_call, timeout_secs=settings.tool_timeout_seconds)
