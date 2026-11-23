@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vesta 2.0: an energy-intelligence demo for Multicentro (a Chilean retail chain). It adds a read-only FastAPI "Energy Tools" API, an optional OpenAI agent and a Pipecat voice agent on top of the browser dashboard. Docs, UI strings, prompts and tool warnings are in Spanish (es-CL). Keep new user-facing text in Spanish.
+Vesta 2.0: an energy-intelligence demo for Multicentro (a Chilean retail chain). It adds a read-only FastAPI "Energy Tools" API, an optional OpenAI agent and a Pipecat voice agent on top of the browser dashboard. Docs in `docs/`, UI strings, prompts and tool warnings are in Spanish (es-CL); keep new user-facing text in Spanish. `README.md` is in English; quote UI labels in it as they appear on screen.
 
 The parent directory (`../`) holds the original dashboard project with its own CLAUDE.md. `dashboard/dashboard.html` here is a **diverged copy**: it adds `buildSnapshot()`, monthly totals in the snapshot (`by_month`) and the 💬 assistant panel (chat and 🎙 voice), which sends the snapshot to the API when served from `/app`. It has no snapshot download or standalone sync button any more. Don't overwrite one with the other. It uses CRLF line endings; keep them when editing it with scripts.
 

@@ -1,212 +1,208 @@
-# Vesta 2.0 · asistente de inteligencia energética
+# Vesta 2.0 · energy intelligence assistant
 
 [![Tests](https://github.com/IAndy-10/voiceAI-energy-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/IAndy-10/voiceAI-energy-assistant/actions/workflows/tests.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 
-Vesta 2.0 es una demostración local de inteligencia energética para retail. Conserva el dashboard original de Ítalo, que procesa Excel privados en el navegador, y añade una API FastAPI con consultas deterministas sobre el snapshot generado por ese dashboard.
+Vesta 2.0 is a local energy-intelligence demo for retail. It keeps Italo's original dashboard, which processes private Excel files in the browser, and adds a FastAPI service with deterministic queries over the snapshot that dashboard generates.
 
-La contribución Vesta no reemplaza el dashboard ni sus cálculos: el backend consulta exclusivamente valores ya calculados en el snapshot. No lee Excel, no crea una base de datos ni deriva indicadores alternativos.
+Vesta does not replace the dashboard or its calculations: the backend only queries values already computed in the snapshot. It does not read Excel files, create a database or derive alternative indicators.
 
-## Arquitectura
+The dashboard UI, prompts and the docs in `docs/` are in Spanish (es-CL). UI labels are quoted below as they appear on screen.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    excel[Excel privados\nDatos/ · fuera de Git] --> dashboard[Dashboard original\ndashboard/dashboard.html]
-    dashboard -- panel 💬 en /app --> snapshot[Snapshot JSON\nvalidado en memoria]
+    excel[Private Excel files\nDatos/ · outside Git] --> dashboard[Original dashboard\ndashboard/dashboard.html]
+    dashboard -- 💬 panel at /app --> snapshot[Snapshot JSON\nvalidated in memory]
     snapshot --> api[FastAPI Energy API]
-    api --> tools[8 Energy Tools\ndeterministas]
-    api --> app[Dashboard en /app\npanel 💬 y 🎙]
-    app --> local[Consultas locales]
-    app -. opcional .-> text[Agente textual OpenAI]
-    voice[Pipecat 1.14.0\nSmallWebRTC] --> adapter[Adaptador HTTP autenticado]
+    api --> tools[8 deterministic\nEnergy Tools]
+    api --> app[Dashboard at /app\n💬 and 🎙 panel]
+    app --> local[Local queries]
+    app -. optional .-> text[OpenAI text agent]
+    voice[Pipecat 1.14.0\nSmallWebRTC] --> adapter[Authenticated HTTP adapter]
     adapter --> api
-    voice -. pipeline opcional .-> stt[STT → LLM → Tools → TTS]
-    ledger[(Ledgers locales\nuso y presupuesto)] --- text
+    voice -. optional pipeline .-> stt[STT → LLM → Tools → TTS]
+    ledger[(Local ledgers\nusage and budget)] --- text
     ledger --- voice
 ```
 
-Componentes principales:
+Main components:
 
-- **Dashboard original**: procesa los cinco Excel locales en el navegador y arma el snapshot. Sigue siendo propietario de sus cálculos.
-- **`/app`**: el mismo dashboard servido por la API. Su panel **💬 Asistente** pide el token, envía el snapshot a la API y ofrece chat (local u OpenAI) y voz (🎙). Funciona también en el celular.
-- **FastAPI Energy API**: mantiene un único snapshot validado en memoria y protege las consultas con Bearer.
-- **Ocho Energy Tools**: `get_overview`, `get_store`, `rank_stores`, `get_solar`, `get_chiller`, `get_equipment`, `get_indicators` y `get_data_info` son la fuente autorizada de métricas energéticas. Su nombre, descripción y argumentos se definen una sola vez en `energy_contracts/`, que comparten la API, el agente textual y el de voz.
-- **Vesta `/demo`**: página de pruebas con Datos y accesos, Indicadores, Asistente IA y Asistente de voz; carga un snapshot JSON (por ejemplo, el sintético).
-- **Agente textual**: OpenAI es opcional y conserva allowlist, límites, `store=false` y ledger de uso.
-- **Voz**: Pipecat 1.14.0 orquesta SmallWebRTC y, cuando se habilita explícitamente, la cascada STT → LLM → Energy Tools → TTS.
+- **Original dashboard**: processes the five local Excel files in the browser and builds the snapshot. It remains the owner of its calculations.
+- **`/app`**: the same dashboard served by the API. Its **💬 Asistente** panel asks for the token, sends the snapshot to the API and offers chat (local or OpenAI) and voice (🎙). It also works on mobile.
+- **FastAPI Energy API**: holds a single validated snapshot in memory and protects queries with a Bearer token.
+- **Eight Energy Tools**: `get_overview`, `get_store`, `rank_stores`, `get_solar`, `get_chiller`, `get_equipment`, `get_indicators` and `get_data_info` are the authoritative source of energy metrics. Their names, descriptions and arguments are defined once in `energy_contracts/`, shared by the API, the text agent and the voice agent.
+- **Vesta `/demo`**: a test page with the tabs Datos y accesos (data and access), Indicadores (indicators), Asistente IA (AI assistant) and Asistente de voz (voice assistant). It loads a snapshot JSON (for example, the synthetic one).
+- **Text agent**: OpenAI is optional and keeps an allowlist, limits, `store=false` and a usage ledger.
+- **Voice**: Pipecat 1.14.0 orchestrates SmallWebRTC and, when explicitly enabled, the STT → LLM → Energy Tools → TTS cascade.
 
-## Estado funcional
+## Status
 
-| Hito | Estado | Alcance |
+| Milestone | Status | Scope |
 | --- | --- | --- |
-| M03.7 | Implementado y validado | Chat energético local/OpenAI opcional, snapshots, autenticación, presupuestos y demo. |
-| M04.1 | Implementado | Adaptador HTTP autenticado hacia las Energy Tools (hoy ocho). |
-| M04.2 | Implementado y validado en smoke tests | Entorno Pipecat 1.14.0, cliente SmallWebRTC y pruebas de transporte. |
-| M04.3 | Implementado; conexión manual validada | Cuarta pestaña y conexión SmallWebRTC local en Windows. |
-| M04.4 | Implementado y cubierto por pruebas | Pipeline opcional STT → LLM → Tools → TTS, allowlist y presupuesto persistente. |
-| M04.5 | Preparado para validación manual | Procedimiento controlado para una primera conversación. No se declara completado hasta obtener evidencia real extremo a extremo. |
-| M04.6 | Implementado y cubierto por pruebas | Runner Pipecat persistente, autorización efímera por sesión y controles de IA textual/voz independientes. |
-| M04.7 | Cerrado con decisión de plataforma | Windows usa Pipecat nativo; macOS conserva el flujo Docker de Ítalo; Linux + Docker queda pendiente de una validación WebRTC real. |
-| M04.8 | Implementado; validado en macOS | TTS intercambiable (OpenAI por defecto o ElevenLabs Flash v2.5) y resumen de latencia por servicio. |
-| M04.9 | Implementado; validado desde un celular | Voz remota con Cloudflare Tunnel y TURN de Twilio; `/start` exige la autorización de sesión. |
+| M03.7 | Implemented and validated | Local energy chat with optional OpenAI, snapshots, authentication, budgets and demo. |
+| M04.1 | Implemented | Authenticated HTTP adapter to the Energy Tools (eight today). |
+| M04.2 | Implemented and validated in smoke tests | Pipecat 1.14.0 environment, SmallWebRTC client and transport tests. |
+| M04.3 | Implemented; manual connection validated | Fourth tab and local SmallWebRTC connection on Windows. |
+| M04.4 | Implemented and covered by tests | Optional STT → LLM → Tools → TTS pipeline, allowlist and persistent budget. |
+| M04.5 | Ready for manual validation | Controlled procedure for a first conversation. Not declared complete until there is real end-to-end evidence. |
+| M04.6 | Implemented and covered by tests | Persistent Pipecat runner, ephemeral per-session authorization and independent text/voice AI controls. |
+| M04.7 | Closed with a platform decision | Windows uses native Pipecat; macOS keeps Italo's Docker flow; Linux + Docker awaits a real WebRTC validation. |
+| M04.8 | Implemented; validated on macOS | Swappable TTS (OpenAI by default or ElevenLabs Flash v2.5) and per-service latency summary. |
+| M04.9 | Implemented; validated from a phone | Remote voice with Cloudflare Tunnel and Twilio TURN; `/start` requires the session grant. |
 
-**El demo está completo.** Lo que sigue es probarlo con usuarios y reunir feedback; ver [Pruebas y feedback](#pruebas-y-feedback).
+**The demo is complete.** The next step is testing it with users and gathering feedback; see [Testing and feedback](#testing-and-feedback).
 
-## Requisitos
+## Requirements
 
-- Docker Desktop con Docker Compose para dashboard y Energy API.
-- Python 3.11 para el backend; Python 3.12 para ejecutar el runner Pipecat local de Windows.
-- Un token local para la API: `ENERGY_TOOLS_API_TOKEN`.
-- Excel y snapshots privados en `Datos/`, fuera de Git.
-- OpenAI es opcional. `OPENAI_API_KEY` solo pertenece al backend o al proceso local de voz cuando exista autorización explícita.
+- Docker Desktop with Docker Compose for the dashboard and the Energy API.
+- Python 3.11 for the backend; Python 3.12 to run the local Windows Pipecat runner.
+- A local API token: `ENERGY_TOOLS_API_TOKEN`.
+- Private Excel files and snapshots in `Datos/`, outside Git.
+- OpenAI is optional. `OPENAI_API_KEY` belongs only to the backend, or to the local voice process when explicitly authorized.
 
-## Inicio rápido: dashboard, API y demo
+## Quick start: dashboard, API and demo
 
-1. Cree `.env` a partir de `.env.example`, defina un Bearer local único y no suba el archivo a Git.
-2. Mantenga `OPENAI_ENABLED=false` y `VOICE_PIPELINE_ENABLED=false` para una demo sin proveedor externo.
-3. Inicie los servicios:
+1. Create `.env` from `.env.example`, set a unique local Bearer token, and don't commit the file.
+2. Keep `OPENAI_ENABLED=false` and `VOICE_PIPELINE_ENABLED=false` for a demo with no external provider.
+3. Start the services:
 
    ```powershell
    docker compose up -d --build
    ```
 
-4. Abra [`/app`](http://127.0.0.1:8000/app), arrastre los cinco `.xlsx` y pulse **💬 Asistente**.
-5. Ingrese el Bearer. El panel envía el snapshot a la API y queda listo para preguntar. Para voz, inicie también el perfil `voice` (`docker compose --profile voice up -d --build`) y use 🎙.
+4. Open [`/app`](http://127.0.0.1:8000/app), drag in the five `.xlsx` files and click **💬 Asistente**.
+5. Enter the Bearer token. The panel sends the snapshot to the API and is ready for questions. For voice, also start the `voice` profile (`docker compose --profile voice up -d --build`) and use 🎙.
 
-El snapshot vive solo en memoria. Si la API se reinicia, el panel lo vuelve a enviar solo en la siguiente pregunta; al recrear `energy-api` también basta con preguntar de nuevo.
+The snapshot lives in memory only. If the API restarts, the panel sends it again with the next question; after recreating `energy-api`, asking again is also enough.
 
-Alternativas: el [dashboard sin asistente](http://127.0.0.1:8766/dashboard.html) en `:8766`, y la [demo Vesta](http://127.0.0.1:8000/demo), que carga un snapshot JSON en **Datos y accesos** (para una prueba segura, `Datos\vesta_snapshot_sintetico.json`). El dashboard ya no tiene botón de descarga del snapshot; para validar uno real con `scripts/validate_real_snapshot.py`, ejecute `copy(JSON.stringify(buildSnapshot()))` en la consola del navegador con los `.xlsx` cargados y guarde el contenido como `agent_snapshot.json` (queda ignorado por Git). El volumen `agent-usage` conserva solo contadores agregados del agente textual; `voice-usage` cumple la misma función para el contenedor de voz.
+Alternatives: the [dashboard without the assistant](http://127.0.0.1:8766/dashboard.html) on `:8766`, and the [Vesta demo](http://127.0.0.1:8000/demo), which loads a snapshot JSON under **Datos y accesos** (for a safe test, `Datos\vesta_snapshot_sintetico.json`). The dashboard no longer has a snapshot download button; to validate a real snapshot with `scripts/validate_real_snapshot.py`, run `copy(JSON.stringify(buildSnapshot()))` in the browser console with the `.xlsx` files loaded and save the content as `agent_snapshot.json` (ignored by Git). The `agent-usage` volume keeps only aggregate counters for the text agent; `voice-usage` does the same for the voice container.
 
-## Modos de consulta
+## Query modes
 
-- **Consultas locales · Sin OpenAI**: usa el intérprete determinista y Energy Tools; no envía información a proveedores externos.
-- **Usar OpenAI**: requiere `OPENAI_ENABLED=true` en el servidor y activación voluntaria en **Asistente IA**. El frontend no puede superar límites ni presupuestos del backend.
-- **Asistente de voz**: `VOICE_PROVIDER=pipecat` es el proveedor de transporte implementado. `openai_direct` es una alternativa futura y no está implementada.
+- **Consultas locales · Sin OpenAI** (local queries, no OpenAI): uses the deterministic interpreter and the Energy Tools; sends nothing to external providers.
+- **Usar OpenAI** (use OpenAI): requires `OPENAI_ENABLED=true` on the server and opting in under **Asistente IA**. The frontend cannot exceed the backend's limits or budgets.
+- **Asistente de voz** (voice assistant): `VOICE_PROVIDER=pipecat` is the implemented transport provider. `openai_direct` is a future alternative and is not implemented.
 
-## Voz con Pipecat
+## Voice with Pipecat
 
-El runner local de Windows se mantiene separado de `energy-api`. El pipeline real se encuentra desactivado de forma predeterminada:
+The local Windows runner stays separate from `energy-api`. The real pipeline is disabled by default:
 
 ```text
 VOICE_PROVIDER=pipecat
 VOICE_PIPELINE_ENABLED=false
 ```
 
-### Runner local Windows
+### Local Windows runner
 
-`.env` es la fuente única para el token de Energy Tools, permisos globales, modelos, presupuestos y `OPENAI_API_KEY`. Cree `.env` desde `.env.example`. Si necesita cambiar solo la ruta de red de Windows, copie `.env.windows.example` a `.env.windows.local`; ese archivo admite únicamente la URL local de FastAPI, host, puerto y orígenes del runner, y está ignorado por Git.
+`.env` is the single source for the Energy Tools token, global permissions, models, budgets and `OPENAI_API_KEY`. Create `.env` from `.env.example`. If you only need to change the Windows network path, copy `.env.windows.example` to `.env.windows.local`; that file only accepts the local FastAPI URL and the runner's host, port and origins, and it is ignored by Git.
 
 ```powershell
 docker compose -f compose.yaml -f compose.windows-voice.yaml up -d --build dashboard energy-api
 .\scripts\start-voice-windows.ps1
 ```
 
-Ese comando inicia únicamente dashboard y API en Docker. En Windows no inicie
-`voice-agent` ni `turn-local`: el navegador llega al runner nativo en
-`127.0.0.1:7861` y la API llega al mismo proceso mediante
-`host.docker.internal:7861`. Si el runner no está iniciado, el chat escrito
-sigue disponible y la UI informa que la voz no está disponible.
+That command starts only the dashboard and the API in Docker. On Windows, don't start `voice-agent` or `turn-local`: the browser reaches the native runner at `127.0.0.1:7861` and the API reaches the same process through `host.docker.internal:7861`. If the runner isn't running, written chat stays available and the UI reports that voice is unavailable.
 
-El lanzador mapea `ENERGY_TOOLS_API_TOKEN` a `VOICE_ENERGY_API_TOKEN` solo en el proceso hijo de Pipecat: no duplique el valor en `.env`. Con `VOICE_PIPELINE_ENABLED=false` inicia transporte mínimo sin requerir una clave OpenAI. Con valor `true`, exige la clave antes de arrancar, pero no realiza una llamada OpenAI ni inicia una sesión por sí mismo. Para revisar la configuración efectiva sin arrancar el runner ni revelar secretos use `./scripts/start-voice-windows.ps1 -CheckOnly`.
+The launcher maps `ENERGY_TOOLS_API_TOKEN` to `VOICE_ENERGY_API_TOKEN` only in the Pipecat child process, so don't duplicate the value in `.env`. With `VOICE_PIPELINE_ENABLED=false` it starts a minimal transport without requiring an OpenAI key. With `true`, it requires the key before starting, but it doesn't call OpenAI or start a session on its own. To review the effective configuration without starting the runner or revealing secrets, use `./scripts/start-voice-windows.ps1 -CheckOnly`.
 
-Detenga el runner Windows con `Ctrl+C`. `VOICE_PIPELINE_ENABLED=true` es un permiso global: debe existir tanto en la API como en el runner. Una vez iniciado el stack, la selección de **Usar agente IA de voz** se realiza por sesión en la UI y no reinicia el runner.
+Stop the Windows runner with `Ctrl+C`. `VOICE_PIPELINE_ENABLED=true` is a global permission: it must be set in both the API and the runner. Once the stack is running, **Usar agente IA de voz** (use the voice AI agent) is selected per session in the UI and does not restart the runner.
 
 ```powershell
 docker compose up -d --build --force-recreate --no-deps energy-api
 ```
 
-Esto vacía el snapshot en memoria, por lo que debe volver a cargar el JSON DEMO después del reinicio. El procedimiento completo de conversación controlada está en [M04.5](docs/M04.5-FIRST-VOICE-TEST.md).
+This clears the in-memory snapshot, so the DEMO JSON must be loaded again after the restart. The full controlled-conversation procedure is in [M04.5](docs/M04.5-FIRST-VOICE-TEST.md).
 
-### Servicio de voz Docker y plataformas
+### Docker voice service and platforms
 
-La ruta Docker de `voice-agent` y `turn-local` se conserva sin cambios para
-macOS, donde Ítalo realizará su validación. Sus contenedores usan
-`restart: unless-stopped`:
+The Docker path for `voice-agent` and `turn-local` is kept unchanged for macOS, where Italo runs the validation. Its containers use `restart: unless-stopped`:
 
 ```powershell
 docker compose up -d --build
 docker compose down
 ```
 
-El healthcheck del runner comprueba que su HTTP responda; **no** confirma que ICE/WebRTC ni el audio estén conectados. Docker Desktop Windows no es una ruta soportada para media WebRTC: los candidatos bridge del contenedor no son alcanzables desde Chrome y publicar HTTP no publica UDP WebRTC. Linux + Docker Compose es candidato de producción, pero requiere una validación ICE/audio real antes de declararlo soportado.
+The runner's healthcheck verifies that its HTTP server responds; it does **not** confirm that ICE/WebRTC or audio are connected. Docker Desktop on Windows is not a supported path for WebRTC media: the container's bridge candidates are unreachable from Chrome, and publishing HTTP does not publish WebRTC UDP. Linux + Docker Compose is a production candidate, but it needs a real ICE/audio validation before being declared supported.
 
-### Permisos y activación por sesión
+### Permissions and per-session activation
 
-`OPENAI_ENABLED` autoriza como máximo el chat escrito y `VOICE_PIPELINE_ENABLED` autoriza como máximo la voz. Ambos parten apagados y son independientes. La UI no cambia `.env`: el checkbox de voz solicita a la API local, con Bearer, una autorización opaca de un solo uso y corta duración para modo `minimal` o `ai`. El runner consume esa autorización antes de crear STT, LLM o TTS; una solicitud directa al runner no puede convertir una sesión mínima en una sesión con gasto.
+`OPENAI_ENABLED` authorizes written chat at most, and `VOICE_PIPELINE_ENABLED` authorizes voice at most. Both start off and are independent. The UI does not change `.env`: the voice checkbox asks the local API, with the Bearer token, for an opaque, single-use, short-lived grant for `minimal` or `ai` mode. The runner consumes that grant before creating STT, LLM or TTS, so a direct request to the runner cannot turn a minimal session into one that spends money.
 
-La pantalla distingue **Runner disponible** (sonda HTTP), **Conectando**, **Conectado**, **IA de voz activada** y **Error**. El chat escrito continúa disponible si el runner está apagado.
+The screen distinguishes **Runner disponible** (runner available, HTTP probe), **Conectando** (connecting), **Conectado** (connected), **IA de voz activada** (voice AI on) and **Error**. Written chat stays available if the runner is off.
 
-## Configuración, datos y seguridad
+## Configuration, data and security
 
-`.env.example` es la referencia de configuración segura: contiene nombres, valores de desarrollo y límites, nunca claves reales.
+`.env.example` is the safe configuration reference: it holds names, development values and limits, never real keys.
 
-| Grupo | Variables principales |
+| Group | Main variables |
 | --- | --- |
 | Energy API | `ENERGY_TOOLS_API_TOKEN`, `SNAPSHOT_MAX_BYTES`, `VESTA_DEMO_SNAPSHOT_SHA256` |
-| Agente textual | `OPENAI_ENABLED`, `OPENAI_API_KEY`, `OPENAI_MODEL`, presupuesto, límites de consultas, tokens y rondas de tools |
-| Transporte de voz | `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_PIPECAT_URL`, límites de sesión y grabación |
-| Pipeline de voz | `VOICE_PIPELINE_ENABLED`, `VOICE_STT_MODEL`, `VOICE_LLM_MODEL`, `VOICE_TTS_MODEL`, `VOICE_TTS_VOICE`, límites de turnos y presupuesto |
-| TTS de voz | `VOICE_TTS_PROVIDER` (`openai` por defecto o `elevenlabs`), `ELEVENLABS_API_KEY`, `ELEVENLABS_MODEL`, `ELEVENLABS_VOICE` |
+| Text agent | `OPENAI_ENABLED`, `OPENAI_API_KEY`, `OPENAI_MODEL`, budget, limits on queries, tokens and tool rounds |
+| Voice transport | `VOICE_ENABLED`, `VOICE_PROVIDER`, `VOICE_PIPECAT_URL`, session and recording limits |
+| Voice pipeline | `VOICE_PIPELINE_ENABLED`, `VOICE_STT_MODEL`, `VOICE_LLM_MODEL`, `VOICE_TTS_MODEL`, `VOICE_TTS_VOICE`, turn limits and budget |
+| Voice TTS | `VOICE_TTS_PROVIDER` (`openai` by default or `elevenlabs`), `ELEVENLABS_API_KEY`, `ELEVENLABS_MODEL`, `ELEVENLABS_VOICE` |
 
-El runner Windows toma `VOICE_ENERGY_API_BASE_URL` y sus datos de escucha desde `.env.windows.local` (o sus valores locales seguros) y el resto desde `.env`. Las variables heredadas de PowerShell no tienen precedencia: el lanzador reemplaza sus variables administradas durante la ejecución y las restaura al detenerse. Los conflictos entre ambos archivos y cualquier secreto en el archivo Windows se rechazan. Compose configura el equivalente interno para `voice-agent`; no expone esos valores al navegador. `.env` se lee al inicio: al cambiarlo, reinicie el runner Windows y recree solo el servicio Docker afectado. No es sincronización en tiempo real.
+The Windows runner takes `VOICE_ENERGY_API_BASE_URL` and its listening settings from `.env.windows.local` (or its safe local defaults), and everything else from `.env`. Variables inherited from PowerShell do not take precedence: the launcher replaces its managed variables while running and restores them when it stops. Conflicts between the two files, and any secret in the Windows file, are rejected. Compose configures the internal equivalent for `voice-agent` and does not expose those values to the browser. `.env` is read at startup: after changing it, restart the Windows runner and recreate only the affected Docker service. It is not synced in real time.
 
-- `.env`, `Datos/`, `data/`, Excel, snapshots, grabaciones y ledgers están ignorados por Git.
-- No se envían Excel completos ni snapshots completos a un LLM. Las herramientas leen solo el snapshot activo por medio de la API local autenticada.
-- Los servicios publicados por Compose se restringen a `127.0.0.1`.
-- Los ledgers conservan únicamente contadores y costo estimado/agregado; no guardan audio, transcripciones ni el snapshot.
-- Las reservas de voz se aplican antes de construir STT, LLM o TTS y se contabilizan conservadoramente incluso ante fallo del proveedor.
-- Una clave expuesta debe revocarse y rotarse antes de volver a utilizarla. Nunca ejecute `docker compose config` con secretos reales, porque podría expandirlos en la salida.
+- `.env`, `Datos/`, `data/`, Excel files, snapshots, recordings and ledgers are ignored by Git.
+- Whole Excel files or snapshots are never sent to an LLM. The tools read only the active snapshot through the authenticated local API.
+- Services published by Compose are bound to `127.0.0.1`.
+- Ledgers keep only counters and estimated/aggregate cost; they don't store audio, transcripts or the snapshot.
+- Voice reservations are applied before STT, LLM or TTS are built, and they are charged conservatively even if the provider fails.
+- An exposed key must be revoked and rotated before it is used again. Never run `docker compose config` with real secrets, because it can expand them in its output.
 
-## Modelos intercambiables y roadmap
+## Swappable models and roadmap
 
-La arquitectura prevista mantiene responsabilidades separadas:
+The planned architecture keeps responsibilities separate:
 
 ```text
-STT → LLM → ocho Energy Tools → TTS
+STT → LLM → eight Energy Tools → TTS
 ```
 
-- **Actual y opcional**: OpenAI para STT, LLM y TTS dentro de Pipecat.
-- **Actual y opcional**: ElevenLabs como TTS (ver [TTS con ElevenLabs](#tts-con-elevenlabs)).
-- **Futuro, no implementado**: Ollama con Qwen para español y Gemma para inglés como LLM local.
-- **Futuro, no implementado**: Piper como TTS local.
-- **Futuro, no implementado**: STT local, a elegir según compatibilidad con Pipecat.
-- **Futuro, no implementado**: Twilio Voice como canal telefónico (hoy Twilio se usa solo como TURN para la voz remota).
+- **Current, optional**: OpenAI for STT, LLM and TTS inside Pipecat.
+- **Current, optional**: ElevenLabs as TTS (see [ElevenLabs TTS](#elevenlabs-tts)).
+- **Future, not implemented**: Ollama with Qwen for Spanish and Gemma for English as a local LLM.
+- **Future, not implemented**: Piper as a local TTS.
+- **Future, not implemented**: local STT, chosen by Pipecat compatibility.
+- **Future, not implemented**: Twilio Voice as a phone channel (today Twilio is used only as TURN for remote voice).
 
-### TTS con ElevenLabs
+### ElevenLabs TTS
 
-El TTS usa OpenAI por defecto. Para usar ElevenLabs (streaming por WebSocket; en macOS bajó el primer audio de ~1,0 s a ~0,23 s, ver [M04.8](docs/M04.8-ELEVENLABS-TTS.md)):
+TTS uses OpenAI by default. To use ElevenLabs (WebSocket streaming; on macOS it cut time to first audio from ~1.0 s to ~0.23 s, see [M04.8](docs/M04.8-ELEVENLABS-TTS.md)):
 
-1. Cree una API key en https://elevenlabs.io/app/settings/api-keys con permiso de text-to-speech.
-2. En `.env`, defina `VOICE_TTS_PROVIDER=elevenlabs` y `ELEVENLABS_API_KEY=...`.
-3. Recree el runner: `docker compose --profile voice up -d --build --force-recreate voice-agent` (en Windows, reinstale `voice_agent/requirements-voice.txt` en `.venv` y reinicie el lanzador). El log muestra `tts=elevenlabs/eleven_flash_v2_5/<voz>`.
+1. Create an API key at https://elevenlabs.io/app/settings/api-keys with text-to-speech permission.
+2. In `.env`, set `VOICE_TTS_PROVIDER=elevenlabs` and `ELEVENLABS_API_KEY=...`.
+3. Recreate the runner: `docker compose --profile voice up -d --build --force-recreate voice-agent` (on Windows, reinstall `voice_agent/requirements-voice.txt` into `.venv` and restart the launcher). The log shows `tts=elevenlabs/eleven_flash_v2_5/<voice>`.
 
-- La voz por defecto es George (`JBFqnCBsd6RMkjVDRZzb`), una voz prediseñada que funciona en el plan gratuito pero habla español con acento inglés. Para otra voz, use `ELEVENLABS_VOICE` con un voice ID; las voces de la Voice Library requieren un plan pagado.
-- STT y LLM siguen en OpenAI. ElevenLabs no acepta instrucciones de estilo, así que el tono depende de la voz.
-- ElevenLabs cobra créditos de su plan; el presupuesto local de voz (`VOICE_SESSION_BUDGET_USD`) no los controla. El límite real es la cuota del plan.
-- Con ElevenLabs activo, el texto de las respuestas habladas (cifras agregadas) también se envía a ElevenLabs.
-- Si ElevenLabs rechaza la solicitud (voz inexistente, voz de pago en plan gratuito), Pipecat solo registra `TTS context ... completed with no audio` y no muestra el error real. Vacíe `ELEVENLABS_VOICE` para volver a la voz por defecto.
+- The default voice is George (`JBFqnCBsd6RMkjVDRZzb`), a premade voice that works on the free plan but speaks Spanish with an English accent. For another voice, set `ELEVENLABS_VOICE` to a voice ID; Voice Library voices require a paid plan.
+- STT and LLM stay on OpenAI. ElevenLabs doesn't accept style instructions, so the tone depends on the voice.
+- ElevenLabs charges credits from its plan; the local voice budget (`VOICE_SESSION_BUDGET_USD`) doesn't control them. The real limit is the plan's quota.
+- With ElevenLabs on, the text of spoken answers (aggregate figures) is also sent to ElevenLabs.
+- If ElevenLabs rejects the request (a voice that doesn't exist, a paid voice on the free plan), Pipecat only logs `TTS context ... completed with no audio` and doesn't show the real error. Clear `ELEVENLABS_VOICE` to go back to the default voice.
 
-### Latencia
+### Latency
 
-El runner activa las métricas de Pipecat, que registran el tiempo al primer byte (TTFB) de cada servicio. Para resumirlas después de una o más sesiones:
+The runner enables Pipecat metrics, which record each service's time to first byte (TTFB). To summarize them after one or more sessions:
 
 ```bash
 docker compose logs --since 30m voice-agent | python scripts/voice_latency.py
 ```
 
-El resumen muestra n, mediana, p90 y rango por servicio (`OpenAISTTService`, `OpenAILLMService`, `OpenAITTSService` o `ElevenLabsTTSService`). Compare proveedores con varias preguntas parecidas en cada uno.
+The summary shows n, median, p90 and range per service (`OpenAISTTService`, `OpenAILLMService`, `OpenAITTSService` or `ElevenLabsTTSService`). Compare providers with several similar questions on each.
 
-### Voz remota (Cloudflare Tunnel + Twilio TURN)
+### Remote voice (Cloudflare Tunnel + Twilio TURN)
 
-Para que alguien en otra red use la voz, `/app` y el runner se exponen por túneles HTTPS de Cloudflare y el audio pasa por el TURN de Twilio. Los servicios siguen en `127.0.0.1`. Detalle y seguridad en [M04.9](docs/M04.9-REMOTE-VOICE.md).
+For someone on another network to use voice, `/app` and the runner are exposed through Cloudflare HTTPS tunnels and the audio goes through Twilio's TURN. The services stay on `127.0.0.1`. Details and security in [M04.9](docs/M04.9-REMOTE-VOICE.md).
 
-1. Agregue `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` a `.env`.
-2. Abra dos túneles: `cloudflared tunnel --url http://127.0.0.1:8000` y otro para `:7860`.
-3. En `.env`: `VOICE_TURN_MODE=twilio`, agregue la URL del túnel de `:8000` a `VOICE_ALLOWED_ORIGINS` y use la del túnel de `:7860` como `VOICE_PIPECAT_URL`.
-4. `docker compose --profile voice up -d --build` y pruebe desde otra red (por ejemplo, un celular con datos móviles).
+1. Add `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` to `.env`.
+2. Open two tunnels: `cloudflared tunnel --url http://127.0.0.1:8000` and another for `:7860`.
+3. In `.env`: set `VOICE_TURN_MODE=twilio`, add the `:8000` tunnel URL to `VOICE_ALLOWED_ORIGINS` and use the `:7860` tunnel URL as `VOICE_PIPECAT_URL`.
+4. Run `docker compose --profile voice up -d --build` and test from another network (for example, a phone on mobile data).
 
-Las credenciales TURN de Twilio se renuevan solas antes de vencer. Cierre los túneles al terminar.
+Twilio TURN credentials renew themselves before they expire. Close the tunnels when you're done.
 
-## Pruebas
+## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
@@ -214,50 +210,50 @@ Las credenciales TURN de Twilio se renuevan solas antes de vencer. Cierre los t�
 docker compose run --rm --no-deps voice-agent python -m voice_agent.smoke_test
 ```
 
-Las pruebas usan dobles/mocks para OpenAI y ElevenLabs y no consumen tokens ni créditos. El workflow [Tests](.github/workflows/tests.yml) las ejecuta en cada push a `main` y en cada Pull Request. La conversación real STT → LLM → Tools → TTS se ejecuta solo cuando una persona la habilita manualmente y debe probarse primero con el snapshot sintético.
+The tests use doubles/mocks for OpenAI and ElevenLabs and consume no tokens or credits. The [Tests](.github/workflows/tests.yml) workflow runs them on every push to `main` and every pull request. The real STT → LLM → Tools → TTS conversation runs only when a person enables it manually, and it should be tried with the synthetic snapshot first.
 
-## Limitaciones conocidas
+## Known limitations
 
-- SmallWebRTC/Pipecat funciona con el runner local de Windows; la conexión desde la cuarta pestaña fue validada manualmente.
-- Docker Desktop Windows no ofrece una ruta WebRTC directa validada; use el runner nativo. Un `HTTP 200` de señalización no equivale a audio conectado.
-- En macOS, el flujo Docker (`voice-agent` + `turn-local`) está validado de punta a punta con proveedores reales, también desde un celular por túnel y TURN de Twilio. Linux + Docker Compose sigue pendiente de una prueba ICE y audio real.
-- `VOICE_PIPELINE_ENABLED=false` es el valor inicial y no realiza llamadas externas.
-- Que el runner figure disponible o devuelva `HTTP 200` no prueba una conexión ICE.
-- `VOICE_PROVIDER=openai_direct`, Ollama, Piper, STT local y Twilio como canal telefónico no están implementados. Twilio sí se usa como TURN para la voz remota.
+- SmallWebRTC/Pipecat works with the local Windows runner; the connection from the fourth tab was validated manually.
+- Docker Desktop on Windows has no validated direct WebRTC path; use the native runner. A signaling `HTTP 200` does not mean audio is connected.
+- On macOS, the Docker flow (`voice-agent` + `turn-local`) is validated end to end with real providers, including from a phone over a tunnel and Twilio TURN. Linux + Docker Compose still awaits a real ICE and audio test.
+- `VOICE_PIPELINE_ENABLED=false` is the default and makes no external calls.
+- A runner shown as available, or returning `HTTP 200`, does not prove an ICE connection.
+- `VOICE_PROVIDER=openai_direct`, Ollama, Piper, local STT and Twilio as a phone channel are not implemented. Twilio is used as TURN for remote voice.
 
-## Colaboración y Pull Requests
+## Collaboration and pull requests
 
-El dashboard y su especificación original se preservan. Los desarrollos de Vesta se realizan en ramas `feature/*` y se integran mediante Pull Requests revisables hacia el repositorio original de [Ítalo](https://github.com/IAndy-10/voiceAI-energy-assistant). No se integran datos privados, secretos ni artefactos de ejecución en esas revisiones.
+The dashboard and its original specification are preserved. Vesta work happens on `feature/*` branches and is merged through reviewable pull requests into [Italo's](https://github.com/IAndy-10/voiceAI-energy-assistant) original repository. Private data, secrets and runtime artifacts are never included in those reviews.
 
-Resumen sugerido para revisión: validar el contrato de snapshot y las ocho Energy Tools, ejecutar la demo sin proveedores, revisar el adaptador HTTP de voz y acordar la estrategia ICE/TURN y proveedores locales antes de habilitar conversaciones cloud.
+Suggested review summary: validate the snapshot contract and the eight Energy Tools, run the demo without providers, review the voice HTTP adapter, and agree on the ICE/TURN strategy and local providers before enabling cloud conversations.
 
-## Documentación relacionada
+## Related documentation (in Spanish)
 
-- [Seguridad y UX M03.7](docs/M03.7-SECURITY-UX.md)
-- [Contrato del snapshot](docs/INTEGRATION-CONTRACT.md)
-- [Cobertura de datos](docs/M03.5-DATA-COVERAGE.md)
-- [Integración Pipecat M04.1](docs/M04.1-PIPECAT-INTEGRATION.md)
-- [WebRTC M04.2](docs/M04.2B-PIPECAT-WEBRTC.md)
-- [Voz remota M04.9](docs/M04.9-REMOTE-VOICE.md)
-- [Arquitectura de voz M04.3](docs/M04.3-VOICE-ARCHITECTURE.md)
-- [Pipeline Energy Tools M04.4](docs/M04.4-PIPECAT-ENERGY-PIPELINE.md)
-- [Primera conversación controlada M04.5](docs/M04.5-FIRST-VOICE-TEST.md)
-- [Diagnóstico y decisión Windows M04.7](docs/M04.7-WEBRTC-WINDOWS-DIAGNOSIS.md)
-- [TTS con ElevenLabs y latencia M04.8](docs/M04.8-ELEVENLABS-TTS.md)
-- [Especificación original de demostración](docs/multicentro_energy_manager_demo_spec.md)
-- [Aprendizajes: voz, contenedores y WebRTC](docs/LEARNINGS.md)
+- [Security and UX, M03.7](docs/M03.7-SECURITY-UX.md)
+- [Snapshot contract](docs/INTEGRATION-CONTRACT.md)
+- [Data coverage](docs/M03.5-DATA-COVERAGE.md)
+- [Pipecat integration, M04.1](docs/M04.1-PIPECAT-INTEGRATION.md)
+- [WebRTC, M04.2](docs/M04.2B-PIPECAT-WEBRTC.md)
+- [Remote voice, M04.9](docs/M04.9-REMOTE-VOICE.md)
+- [Voice architecture, M04.3](docs/M04.3-VOICE-ARCHITECTURE.md)
+- [Energy Tools pipeline, M04.4](docs/M04.4-PIPECAT-ENERGY-PIPELINE.md)
+- [First controlled conversation, M04.5](docs/M04.5-FIRST-VOICE-TEST.md)
+- [Windows diagnosis and decision, M04.7](docs/M04.7-WEBRTC-WINDOWS-DIAGNOSIS.md)
+- [ElevenLabs TTS and latency, M04.8](docs/M04.8-ELEVENLABS-TTS.md)
+- [Original demo specification](docs/multicentro_energy_manager_demo_spec.md)
+- [Learnings: voice, containers and WebRTC](docs/LEARNINGS.md)
 
-## Pruebas y feedback
+## Testing and feedback
 
-El demo está cerrado en funcionalidades. Para probarlo con otra persona:
+The demo is feature-complete. To test it with someone else:
 
-1. Levante el stack con voz y, si la persona está en otra red, los túneles (ver [Voz remota](#voz-remota-cloudflare-tunnel--twilio-turn)).
-2. Envíe la URL de `/app` y el token por canales separados. Use un token nuevo solo para la prueba y rótelo al terminar.
-3. Revise antes el presupuesto de voz (`VOICE_BUDGET_USD`; cada sesión reserva `VOICE_SESSION_BUDGET_USD` completo) y después la latencia con `scripts/voice_latency.py`.
-4. Anote para cada pregunta: qué se preguntó, si la cifra y el período fueron correctos, si la voz cortó la pregunta, la demora percibida y cualquier problema de interfaz (en especial en el celular).
+1. Start the stack with voice and, if the person is on another network, the tunnels (see [Remote voice](#remote-voice-cloudflare-tunnel--twilio-turn)).
+2. Send the `/app` URL and the token through separate channels. Use a new token just for the test and rotate it afterwards.
+3. Check the voice budget beforehand (`VOICE_BUDGET_USD`; each session reserves the full `VOICE_SESSION_BUDGET_USD`) and the latency afterwards with `scripts/voice_latency.py`.
+4. For each question, note: what was asked, whether the figure and period were correct, whether voice cut off the question, the perceived delay, and any UI problem (especially on mobile).
 
-Pendientes conocidos: repetir la prueba remota desde un celular con la protección de `/start`, una sesión de voz en Windows con `start-voice-windows.ps1`, y ajustar el silencio de fin de turno si el STT corta preguntas con pausas.
+Known follow-ups: repeat the remote test from a phone with the `/start` protection, run a voice session on Windows with `start-voice-windows.ps1`, and tune the end-of-turn silence if STT cuts off questions with pauses.
 
-## Licencia
+## License
 
-El código de Vesta se publica bajo la [licencia MIT](LICENSE).
+Vesta's source code is released under the [MIT License](LICENSE).
