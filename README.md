@@ -1,5 +1,7 @@
 # Vesta 2.0 · asistente de inteligencia energética
 
+[![Tests](https://github.com/IAndy-10/voiceAI-energy-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/IAndy-10/voiceAI-energy-assistant/actions/workflows/tests.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+
 Vesta 2.0 es una demostración local de inteligencia energética para retail. Conserva el dashboard original de Ítalo, que procesa Excel privados en el navegador, y añade una API FastAPI con consultas deterministas sobre el snapshot generado por ese dashboard.
 
 La contribución Vesta no reemplaza el dashboard ni sus cálculos: el backend consulta exclusivamente valores ya calculados en el snapshot. No lee Excel, no crea una base de datos ni deriva indicadores alternativos.
@@ -212,7 +214,7 @@ Las credenciales TURN de Twilio se renuevan solas antes de vencer. Cierre los t�
 docker compose run --rm --no-deps voice-agent python -m voice_agent.smoke_test
 ```
 
-Las pruebas usan dobles/mocks para OpenAI y ElevenLabs y no consumen tokens ni créditos. La conversación real STT → LLM → Tools → TTS se ejecuta solo cuando una persona la habilita manualmente y debe probarse primero con el snapshot sintético.
+Las pruebas usan dobles/mocks para OpenAI y ElevenLabs y no consumen tokens ni créditos. El workflow [Tests](.github/workflows/tests.yml) las ejecuta en cada push a `main` y en cada Pull Request. La conversación real STT → LLM → Tools → TTS se ejecuta solo cuando una persona la habilita manualmente y debe probarse primero con el snapshot sintético.
 
 ## Limitaciones conocidas
 
@@ -243,6 +245,7 @@ Resumen sugerido para revisión: validar el contrato de snapshot y las ocho Ener
 - [Diagnóstico y decisión Windows M04.7](docs/M04.7-WEBRTC-WINDOWS-DIAGNOSIS.md)
 - [TTS con ElevenLabs y latencia M04.8](docs/M04.8-ELEVENLABS-TTS.md)
 - [Especificación original de demostración](docs/multicentro_energy_manager_demo_spec.md)
+- [Aprendizajes: voz, contenedores y WebRTC](docs/LEARNINGS.md)
 
 ## Pruebas y feedback
 
@@ -254,3 +257,7 @@ El demo está cerrado en funcionalidades. Para probarlo con otra persona:
 4. Anote para cada pregunta: qué se preguntó, si la cifra y el período fueron correctos, si la voz cortó la pregunta, la demora percibida y cualquier problema de interfaz (en especial en el celular).
 
 Pendientes conocidos: repetir la prueba remota desde un celular con la protección de `/start`, una sesión de voz en Windows con `start-voice-windows.ps1`, y ajustar el silencio de fin de turno si el STT corta preguntas con pausas.
+
+## Licencia
+
+El código de Vesta se publica bajo la [licencia MIT](LICENSE).

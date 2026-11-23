@@ -29,3 +29,6 @@ voice_agent/turnserver.local.conf
 __pycache__/
 .pytest_cache/
 *.pyc
+
+# Personal files (never commit)
+*.ics
